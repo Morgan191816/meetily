@@ -8,13 +8,8 @@ static ANALYTICS_CLIENT: std::sync::Mutex<Option<Arc<AnalyticsClient>>> = std::s
 
 #[command]
 pub async fn init_analytics() -> Result<(), String> {
-    let config = AnalyticsConfig {
-        api_key: "phc_ohznXPkRSJYWmrfez9mYxtXv5U5Nekq3iiUts87dJfcr".to_string(),
-        host: Some("https://us.i.posthog.com".to_string()),
-        enabled: true,
-    };
-    
-    let client = Arc::new(AnalyticsClient::new(config).await);
+    // Telemetry is disabled: no endpoint and no key, so nothing can be sent.
+    let client = Arc::new(AnalyticsClient::new(AnalyticsConfig::default()).await);
     
     let mut guard = ANALYTICS_CLIENT.lock().unwrap();
     *guard = Some(client);
