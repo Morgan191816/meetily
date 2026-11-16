@@ -27,7 +27,6 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden"
 
 import { MessageToast } from '../MessageToast';
 import Logo from '../Logo';
-import FeedbackLink from '../FeedbackLink';
 import { ComplianceNotification } from '../ComplianceNotification';
 import { Input } from '../ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group';
@@ -540,8 +539,6 @@ const Sidebar: React.FC = () => {
               <p>Settings</p>
             </TooltipContent>
           </Tooltip>
-
-          <FeedbackLink isCollapsed={isCollapsed} />
         </div>
       </TooltipProvider>
     );
@@ -691,9 +688,6 @@ const Sidebar: React.FC = () => {
           <div className="flex-1">
             {!isCollapsed && (
               <div className="p-3">
-                {/* <span className="text-lg text-center border rounded-full bg-blue-50 border-white font-semibold text-gray-700 mb-2 block items-center">
-                  <span>Meetily</span>
-                </span> */}
                 <Logo isCollapsed={isCollapsed} />
 
                 <div className="relative mb-1">
@@ -811,9 +805,8 @@ const Sidebar: React.FC = () => {
               <Settings className="w-4 h-4 mr-2" />
               <span>Settings</span>
             </button>
-            <FeedbackLink isCollapsed={isCollapsed} />
             <div className="w-full flex items-center justify-center px-3 py-1 text-xs text-gray-400">
-              v0.5.0
+              Morgan Meet v0.5.0
             </div>
           </div>
         )}

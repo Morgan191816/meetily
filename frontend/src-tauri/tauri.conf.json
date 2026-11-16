@@ -1,8 +1,8 @@
 {
     "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-    "productName": "meetily",
+    "productName": "Morgan Meet",
     "version": "0.5.0",
-    "identifier": "com.meetily.ai",
+    "identifier": "com.morgan.meet",
     "build": {
         "frontendDist": "../out",
         "devUrl": "http://localhost:3118",
@@ -12,7 +12,7 @@
     "app": {
         "windows": [
             {
-                "title": "meetily",
+                "title": "Morgan Meet",
                 "width": 1100,
                 "height": 700,
                 "preventOverflow": true,
@@ -82,9 +82,9 @@
     "bundle": {
         "active": true,
         "shortDescription": "Privacy-first AI meeting note taker",
-        "longDescription": "Meetily Community Edition is a free, open-source AI meeting assistant. Record meetings, transcribe audio locally and create AI summaries using local models or a provider you choose. Your recordings and transcripts stay on your device.",
+        "longDescription": "Morgan Meet is an AI meeting assistant. Record meetings, transcribe audio locally and create AI summaries using local models or a provider you choose. Your recordings and transcripts stay on your device.",
         "category": "Productivity",
-        "publisher": "Meetily",
+        "publisher": "Morgan",
         "homepage": "https://meetily.ai",
         "targets": [
             "deb",
