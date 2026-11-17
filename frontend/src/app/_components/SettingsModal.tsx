@@ -190,10 +190,10 @@ export function SettingsModals({
           <div className="mt-6 flex justify-end">
             <button
               onClick={() => {
-                const micDevice = selectedDevices.micDevice ? cachedDeviceLabel(selectedDevices.micDevice) : 'Default';
-                const systemDevice = selectedDevices.systemDevice ? cachedDeviceLabel(selectedDevices.systemDevice) : 'Default';
-                toast.success("Devices selected", {
-                  description: `Microphone: ${micDevice}, System Audio: ${systemDevice}`
+                const micDevice = selectedDevices.micDevice ? cachedDeviceLabel(selectedDevices.micDevice) : '默认';
+                const systemDevice = selectedDevices.systemDevice ? cachedDeviceLabel(selectedDevices.systemDevice) : '默认';
+                toast.success("已选择设备", {
+                  description: `麦克风：${micDevice}，系统声音：${systemDevice}`
                 });
                 onClose('deviceSettings');
               }}
@@ -302,7 +302,7 @@ export function SettingsModals({
     {modals.errorAlert && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <Alert className="max-w-md mx-4 border-red-200 bg-white shadow-xl">
-          <AlertTitle className="text-red-800">Recording Stopped</AlertTitle>
+          <AlertTitle className="text-red-800">录音已停止</AlertTitle>
           <AlertDescription className="text-red-700">
             {messages.errorAlert}
             <button
@@ -320,7 +320,7 @@ export function SettingsModals({
     {modals.chunkDropWarning && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <Alert className="max-w-lg mx-4 border-yellow-200 bg-white shadow-xl">
-          <AlertTitle className="text-yellow-800">Transcription Performance Warning</AlertTitle>
+          <AlertTitle className="text-yellow-800">转写性能警告</AlertTitle>
           <AlertDescription className="text-yellow-700">
             {messages.chunkDropWarning}
             <button
