@@ -2,7 +2,6 @@ use log::{debug as log_debug, error as log_error, info as log_info, warn as log_
 use crate::utils::url_origin_for_log;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Runtime};
-use tauri_plugin_store::StoreExt;
 
 use crate::{
     database::{
@@ -168,30 +167,6 @@ pub struct TranscriptSegment {
     pub audio_end_time: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duration: Option<f64>,
-}
-
-// Helper function to get auth token from store (optional)
-#[allow(dead_code)]
-async fn get_auth_token<R: Runtime>(app: &AppHandle<R>) -> Option<String> {
-    let store = match app.store("store.json") {
-        Ok(store) => store,
-        Err(_) => return None,
-    };
-
-    match store.get("authToken") {
-        Some(token) if token.as_str().is_some() => {
-            log_info!("Auth token loaded from store");
-            token.as_str().map(str::to_owned)
-        }
-        Some(_) => {
-            log_warn!("Auth token in store is not a string");
-            None
-        }
-        None => {
-            log_warn!("No auth token found in store");
-            None
-        }
-    }
 }
 
 // Helper function to get server address - now hardcoded
