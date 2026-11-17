@@ -14,16 +14,9 @@ describe('transcription model readiness', () => {
     });
   });
 
-  test('uses Parakeet commands when Parakeet is the configured provider', () => {
-    expect(getProviderCommands('parakeet')).toEqual({
-      initialize: 'parakeet_init',
-      hasAvailableModels: 'parakeet_has_available_models',
-      getAvailableModels: 'parakeet_get_available_models',
-    });
-  });
-
-  test('does not silently treat an unsupported provider as Parakeet', () => {
+  test('does not silently treat an unsupported provider as supported', () => {
     expect(getProviderCommands('deepgram')).toBeNull();
+    expect(getProviderCommands('parakeet')).toBeNull();
   });
 
   test('recognizes only active downloads', () => {

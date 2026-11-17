@@ -24,6 +24,24 @@ pub struct SaveTranscriptConfigRequest {
 
 pub struct SettingsRepository;
 
+/// Map a stored provider/model to a supported one. Old installs may still have
+/// `parakeet` saved; that engine was removed, so fall back to local Whisper.
+fn normalize_transcript_provider(provider: &str, model: &str) -> crate::api::api::TranscriptConfig {
+    if provider == "parakeet" {
+        log::warn!("parakeet provider was removed; falling back to localWhisper");
+        return crate::api::api::TranscriptConfig {
+            provider: "localWhisper".to_string(),
+            model: crate::config::DEFAULT_WHISPER_MODEL.to_string(),
+            api_key: None,
+        };
+    }
+    crate::api::api::TranscriptConfig {
+        provider: provider.to_string(),
+        model: model.to_string(),
+        api_key: None,
+    }
+}
+
 // Transcript providers: localWhisper, deepgram, elevenLabs, groq, openai
 // Summary providers: openai, claude, ollama, groq, added openrouter
 // NOTE: Handle data exclusion in the higher layer as this is database abstraction layer(using SELECT *)
@@ -146,8 +164,12 @@ impl SettingsRepository {
             sqlx::query_as::<_, TranscriptSetting>("SELECT * FROM transcript_settings LIMIT 1")
                 .fetch_optional(pool)
                 .await?;
-        Ok(setting)
-
+        Ok(setting.map(|mut setting| {
+            let normalized = normalize_transcript_provider(&setting.provider, &setting.model);
+            setting.provider = normalized.provider;
+            setting.model = normalized.model;
+            setting
+        }))
     }
 
     pub async fn save_transcript_config(
@@ -179,7 +201,6 @@ impl SettingsRepository {
     ) -> std::result::Result<(), sqlx::Error> {
         let api_key_column = match provider {
             "localWhisper" => "whisperApiKey",
-            "parakeet" => return Ok(()), // Parakeet doesn't need an API key, return early
             "deepgram" => "deepgramApiKey",
             "elevenLabs" => "elevenLabsApiKey",
             "groq" => "groqApiKey",
@@ -194,11 +215,11 @@ impl SettingsRepository {
         let query = format!(
             r#"
             INSERT INTO transcript_settings (id, provider, model, "{}")
-            VALUES ('1', 'parakeet', '{}', $1)
+            VALUES ('1', 'localWhisper', '{}', $1)
             ON CONFLICT(id) DO UPDATE SET
                 "{}" = $1
             "#,
-            api_key_column, crate::config::DEFAULT_PARAKEET_MODEL, api_key_column
+            api_key_column, crate::config::DEFAULT_WHISPER_MODEL, api_key_column
         );
         sqlx::query(&query).bind(api_key).execute(pool).await?;
 
@@ -211,7 +232,6 @@ impl SettingsRepository {
     ) -> std::result::Result<Option<String>, sqlx::Error> {
         let api_key_column = match provider {
             "localWhisper" => "whisperApiKey",
-            "parakeet" => return Ok(None), // Parakeet doesn't need an API key
             "deepgram" => "deepgramApiKey",
             "elevenLabs" => "elevenLabsApiKey",
             "groq" => "groqApiKey",
@@ -344,5 +364,17 @@ impl SettingsRepository {
         .await?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parakeet_provider_falls_back_to_whisper() {
+        let cfg = normalize_transcript_provider("parakeet", "parakeet-tdt-0.6b-v3-int8");
+        assert_eq!(cfg.provider, "localWhisper");
+        assert_eq!(cfg.model, crate::config::DEFAULT_WHISPER_MODEL);
     }
 }
