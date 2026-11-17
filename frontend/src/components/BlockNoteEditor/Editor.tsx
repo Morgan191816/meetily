@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import type { PartialBlock, Block } from "@blocknote/core";
+import { zh } from "@blocknote/core/locales";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/shadcn/style.css";
@@ -22,6 +23,7 @@ export default function Editor({ initialContent, onChange, editable = true }: Ed
 
   const editor = useCreateBlockNote({
     initialContent: initialContent as PartialBlock[] | undefined,
+    dictionary: zh,
   });
 
   console.log('📝 EDITOR: BlockNote editor created successfully');

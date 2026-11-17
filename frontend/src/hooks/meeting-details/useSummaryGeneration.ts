@@ -117,15 +117,15 @@ export function useSummaryGeneration({
   const getSummaryStatusMessage = useCallback((status: SummaryStatus) => {
     switch (status) {
       case 'processing':
-        return 'Processing transcript...';
+        return '正在处理逐字稿…';
       case 'summarizing':
-        return 'Generating summary...';
+        return '正在生成纪要…';
       case 'regenerating':
-        return 'Regenerating summary...';
+        return '正在重新生成纪要…';
       case 'completed':
-        return 'Summary completed';
+        return '纪要已完成';
       case 'error':
-        return 'Error generating summary';
+        return '生成纪要失败';
       default:
         return '';
     }
