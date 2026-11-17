@@ -2,9 +2,9 @@ name: "CN Tests"
 
 on:
   push:
-    branches: [cn]
+    branches: [cn, phase2]
   pull_request:
-    branches: [cn]
+    branches: [cn, phase2]
   workflow_dispatch:
 
 permissions:
