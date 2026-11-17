@@ -65,7 +65,7 @@ export function useRecordingStart(
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const seconds = String(now.getSeconds()).padStart(2, '0');
-    return `Meeting ${day}_${month}_${year}_${hours}_${minutes}_${seconds}`;
+    return `会议 ${day}_${month}_${year}_${hours}_${minutes}_${seconds}`;
   }, []);
 
   const getTranscriptionProvider = useCallback(async (): Promise<string> => {
@@ -153,7 +153,7 @@ export function useRecordingStart(
       setMeetingTitle(randomTitle);
 
       // Set STARTING status before initiating backend recording
-      setStatus(RecordingStatus.STARTING, 'Initializing recording...');
+      setStatus(RecordingStatus.STARTING, '正在初始化录音…');
 
       // Start the actual backend recording
       console.log('Starting backend recording with meeting:', randomTitle);
@@ -246,7 +246,7 @@ export function useRecordingStart(
             const generatedMeetingTitle = generateMeetingTitle();
 
             // Set STARTING status before initiating backend recording
-            setStatus(RecordingStatus.STARTING, 'Initializing recording...');
+            setStatus(RecordingStatus.STARTING, '正在初始化录音…');
 
             console.log('Auto-starting backend recording with meeting:', generatedMeetingTitle);
             const result = await recordingService.startRecordingWithDevices(
@@ -344,7 +344,7 @@ export function useRecordingStart(
         const generatedMeetingTitle = generateMeetingTitle();
 
         // Set STARTING status before initiating backend recording
-        setStatus(RecordingStatus.STARTING, 'Initializing recording...');
+        setStatus(RecordingStatus.STARTING, '正在初始化录音…');
 
         console.log('Starting backend recording with meeting:', generatedMeetingTitle);
         const result = await recordingService.startRecordingWithDevices(

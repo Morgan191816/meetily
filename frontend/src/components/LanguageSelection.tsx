@@ -11,8 +11,8 @@ export interface Language {
 
 // ISO 639-1 language codes supported by Whisper
 const LANGUAGES: Language[] = [
-  { code: 'auto', name: 'Auto Detect (Original Language)' },
-  { code: 'auto-translate', name: 'Auto Detect (Translate to English)' },
+  { code: 'auto', name: '自动检测（原语言）' },
+  { code: 'auto-translate', name: '自动检测（翻译为英语）' },
   { code: 'en', name: 'English' },
   { code: 'zh', name: 'Chinese' },
   { code: 'de', name: 'German' },
@@ -147,12 +147,12 @@ export function LanguageSelection({
 
       // Show success toast
       const languageName = selectedLang?.name || languageCode;
-      toast.success("Language preference saved", {
-        description: `Transcription language set to ${languageName}`
+      toast.success("语言偏好已保存", {
+        description: `转写语言已设置为 ${languageName}`
       });
     } catch (error) {
       console.error('Failed to save language preference:', error);
-      toast.error("Failed to save language preference", {
+      toast.error("语言偏好保存失败", {
         description: error instanceof Error ? error.message : String(error)
       });
     } finally {
@@ -163,14 +163,14 @@ export function LanguageSelection({
   // Find the selected language name for display
   const selectedLanguageName = LANGUAGES.find(
     lang => lang.code === selectedLanguage
-  )?.name || 'Auto Detect (Original Language)';
+  )?.name || '自动检测（原语言）';
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Globe className="h-4 w-4 text-gray-600" />
-          <h4 className="text-sm font-medium text-gray-900">Transcription Language</h4>
+          <h4 className="text-sm font-medium text-gray-900">转写语言</h4>
         </div>
       </div>
 
@@ -192,23 +192,23 @@ export function LanguageSelection({
         {/* Info text */}
         <div className="text-xs space-y-2 pt-2">
           <p className="text-gray-600">
-            <strong>Current:</strong> {selectedLanguageName}
+            <strong>当前：</strong>{selectedLanguageName}
           </p>
           {selectedLanguage === 'auto' && (
             <div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-800">
-              <p className="font-medium">⚠️ Auto Detect may produce incorrect results</p>
-              <p className="mt-1">For best accuracy, select your specific language (e.g., English, Spanish, etc.)</p>
+              <p className="font-medium">⚠️ 自动检测可能产生不准确的结果</p>
+              <p className="mt-1">为获得最佳准确度，请选择具体语言（如英语、西班牙语等）</p>
             </div>
           )}
           {selectedLanguage === 'auto-translate' && (
             <div className="p-2 bg-blue-50 border border-blue-200 rounded text-blue-800">
-              <p className="font-medium">🌐 Translation Mode Active</p>
-              <p className="mt-1">All audio will be automatically translated to English. Best for multilingual meetings where you need English output.</p>
+              <p className="font-medium">🌐 翻译模式已启用</p>
+              <p className="mt-1">所有音频都会自动翻译为英语，适合需要英语输出的多语言会议。</p>
             </div>
           )}
           {selectedLanguage !== 'auto' && selectedLanguage !== 'auto-translate' && (
             <p className="text-gray-600">
-              Transcription will be optimized for <strong>{selectedLanguageName}</strong>
+              转写将针对 <strong>{selectedLanguageName}</strong> 进行优化
             </p>
           )}
         </div>

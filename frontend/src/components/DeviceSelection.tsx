@@ -62,7 +62,7 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
       console.log('Fetched audio devices:', result);
     } catch (err) {
       console.error('Failed to fetch audio devices:', err);
-      setError('Failed to load audio devices. Please check your system audio settings.');
+      setError('音频设备加载失败。请检查系统音频设置。');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -187,7 +187,7 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
       // Only monitor input devices for now (microphones)
       const deviceNames = inputDevices.map(device => device.name);
       if (deviceNames.length === 0) {
-        setError('No microphone devices found to monitor');
+        setError('未找到可监测的麦克风设备');
         return;
       }
 
@@ -197,7 +197,7 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
       console.log('Started audio level monitoring for input devices:', deviceNames);
     } catch (err) {
       console.error('Failed to start audio level monitoring:', err);
-      setError('Failed to start audio level monitoring');
+      setError('音频电平监测启动失败');
     }
   };
 
@@ -237,7 +237,7 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium text-gray-900">Audio Devices</h4>
+        <h4 className="text-sm font-medium text-gray-900">音频设备</h4>
         <div className="flex items-center space-x-2">
           {/* TODO: Monitoring */}
           {/* <button */}
@@ -274,20 +274,20 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
           <div className="flex items-center gap-2">
             <Mic className="h-4 w-4 text-gray-600" />
             <Label htmlFor="mic-selection" className="text-sm font-medium text-gray-700">
-              Microphone
+              麦克风
             </Label>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  aria-label="About microphone selection"
+                  aria-label="关于麦克风选择"
                   className="text-gray-400 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-full"
                 >
                   <CircleHelp aria-hidden="true" className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
               <TooltipContent className="max-w-xs">
-                Choose a mic to record. Default follows your system’s selected microphone.
+                选择用于录音的麦克风。默认跟随系统当前选择的麦克风。
               </TooltipContent>
             </Tooltip>
           </div>
@@ -297,14 +297,14 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
             disabled={disabled}
           >
             <SelectTrigger id="mic-selection" className="w-full">
-              <SelectValue placeholder="Select Microphone" />
+              <SelectValue placeholder="选择麦克风" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={encodeDeviceOption(null)}>Default Microphone</SelectItem>
+              <SelectItem value={encodeDeviceOption(null)}>默认麦克风</SelectItem>
               {selectedDevices.micDevice &&
                 !isDeviceAvailable(devices, 'Input', selectedDevices.micDevice) && (
                   <SelectItem value={encodeDeviceOption(selectedDevices.micDevice)}>
-                    {cachedDeviceLabel(selectedDevices.micDevice)} — Unavailable — choose a device
+                    {cachedDeviceLabel(selectedDevices.micDevice)} — 不可用 — 请选择设备
                   </SelectItem>
                 )}
               {inputDevices.map((device) => (
@@ -318,13 +318,13 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
             </SelectContent>
           </Select>
           {inputDevices.length === 0 && (
-            <p className="text-xs text-gray-500">No microphone devices found</p>
+            <p className="text-xs text-gray-500">未找到麦克风设备</p>
           )}
 
           {/* Audio Level Meters for Input Devices */}
           {showLevels && inputDevices.length > 0 && (
             <div className="space-y-2 pt-2 border-t border-gray-100">
-              <p className="text-xs text-gray-600 font-medium">Microphone Levels:</p>
+              <p className="text-xs text-gray-600 font-medium">麦克风电平：</p>
               {inputDevices.map((device) => {
                 const levelData = audioLevels.get(device.name);
                 return (
@@ -362,20 +362,20 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
           <div className="flex items-center gap-2">
             <Speaker className="h-4 w-4 text-gray-600" />
             <Label htmlFor="system-selection" className="text-sm font-medium text-gray-700">
-              System Audio
+              系统声音
             </Label>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  aria-label="About system audio selection"
+                  aria-label="关于系统声音选择"
                   className="text-gray-400 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-full"
                 >
                   <CircleHelp aria-hidden="true" className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
               <TooltipContent className="max-w-xs">
-                Choose audio to record. Default follows your system’s selected output.
+                选择要录制的音频。默认跟随系统当前选择的输出设备。
               </TooltipContent>
             </Tooltip>
           </div>
@@ -386,14 +386,14 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
             disabled={disabled}
           >
             <SelectTrigger id="system-selection" className="w-full">
-              <SelectValue placeholder="Select System Audio" />
+              <SelectValue placeholder="选择系统声音" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={encodeDeviceOption(null)}>Default System Audio</SelectItem>
+              <SelectItem value={encodeDeviceOption(null)}>默认系统声音</SelectItem>
               {selectedDevices.systemDevice &&
                 !isDeviceAvailable(devices, 'Output', selectedDevices.systemDevice) && (
                   <SelectItem value={encodeDeviceOption(selectedDevices.systemDevice)}>
-                    {cachedDeviceLabel(selectedDevices.systemDevice)} — Unavailable — choose a device
+                    {cachedDeviceLabel(selectedDevices.systemDevice)} — 不可用 — 请选择设备
                   </SelectItem>
                 )}
               {outputDevices.map((device) => (
@@ -408,7 +408,7 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
           </Select>
 
           {outputDevices.length === 0 && (
-            <p className="text-xs text-gray-500">No system audio devices found</p>
+            <p className="text-xs text-gray-500">未找到系统声音设备</p>
           )}
 
           {/* Backend Selection - available on all platforms */}
@@ -422,8 +422,8 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
 
       {/* Info text */}
       <div className="text-xs text-gray-500 space-y-1">
-        <p>• <strong>Microphone:</strong> Records your voice and ambient sound</p>
-        <p>• <strong>System Audio:</strong> Records computer audio (music, calls, etc.)</p>
+        <p>• <strong>麦克风：</strong>录制你的声音与环境声</p>
+        <p>• <strong>系统声音：</strong>录制电脑播放的音频（音乐、通话等）</p>
       </div>
     </div>
   );
