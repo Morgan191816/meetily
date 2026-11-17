@@ -16,7 +16,7 @@ or its upstream distribution.
 | CPAL | Apache-2.0 | Cross-platform audio I/O |
 | FFmpeg (`binaries/ffmpeg`) | LGPL-2.1+ or GPL-2.0-or-later, depending on the build | Redistributed as a bundled binary; the applicable license text and source code access must be provided with any distributed build |
 | BlockNote (`@blocknote/*`) | MPL-2.0 | Used unmodified |
-| ONNX Runtime (`ort`) | MIT | Only needed for Parakeet models. After the Parakeet engine is removed, ONNX Runtime is no longer bundled or distributed |
+| ONNX Runtime (`ort`) | MIT | Required by the Silero VAD runtime; bundled with the application |
 
 Other Rust and JavaScript dependencies, with their resolved versions, are listed in
 `Cargo.lock` and `frontend/pnpm-lock.yaml`. Each dependency remains under its own
