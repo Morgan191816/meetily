@@ -89,7 +89,7 @@ for (const message of [
         isRecordingDisabled={false} isParentProcessing={false} />);
     });
     await act(async () => { renderer!.root.findAllByType('button')[0].props.onClick(); });
-    expect(JSON.stringify(renderer!.toJSON())).toContain(message);
+    expect(JSON.stringify(renderer!.toJSON())).toContain('你保存的麦克风/系统声音选择需要更新，请在录音设置中重新选择设备。');
   });
 }
 

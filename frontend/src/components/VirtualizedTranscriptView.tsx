@@ -54,14 +54,21 @@ function formatRecordingTime(seconds: number | undefined): string {
 export function cleanStopWords(text: string): string {
     const stopWords = ['uh', 'um', 'er', 'ah', 'hmm', 'hm', 'eh', 'oh', '嗯', '呃', '额', '啊', '哦', '唔'];
 
+    // Same punctuation set for both languages; a space would split the sentence
+    const punctuation = '[，。、,？！；：\\s]*';
+
     let cleanedText = text;
     stopWords.forEach(word => {
-        // Chinese has no word boundaries, and a space would split the sentence
+        // Chinese has no word boundaries: only strip a filler that stands alone,
+        // never one inside a real word (金额/额外/额度)
         if (/[一-鿿]/.test(word)) {
-            cleanedText = cleanedText.replace(new RegExp(`${word}[，。、,\\s]*`, 'g'), '');
+            cleanedText = cleanedText.replace(
+                new RegExp(`(^|[^\\u4e00-\\u9fff])${word}(?![\\u4e00-\\u9fff])${punctuation}`, 'g'),
+                '$1'
+            );
             return;
         }
-        cleanedText = cleanedText.replace(new RegExp(`\\b${word}\\b[,\\s]*`, 'gi'), ' ');
+        cleanedText = cleanedText.replace(new RegExp(`\\b${word}\\b${punctuation}`, 'gi'), ' ');
     });
 
     return cleanedText.replace(/\s+/g, ' ').trim();

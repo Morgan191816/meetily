@@ -119,7 +119,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
 
       // Check for device-related errors
       if (errorMsg.startsWith('Your saved ') && errorMsg.includes('Choose a device in Recording Settings.')) {
-        setDeviceError({ title: '请更新音频设备选择', message: errorMsg });
+        setDeviceError({ title: '请更新音频设备选择', message: '你保存的麦克风/系统声音选择需要更新，请在录音设置中重新选择设备。' });
       } else if (errorMsg.includes('microphone') || errorMsg.includes('mic') || errorMsg.includes('input')) {
         setDeviceError({
           title: '麦克风不可用',

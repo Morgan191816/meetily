@@ -3,6 +3,7 @@ import { Globe } from 'lucide-react';
 import Analytics from '@/lib/analytics';
 import { toast } from 'sonner';
 import { useConfig } from '@/contexts/ConfigContext';
+import { languageDisplayName } from '@/lib/language';
 
 export interface Language {
   code: string;
@@ -114,6 +115,10 @@ const LANGUAGES: Language[] = [
   { code: 'su', name: 'Sundanese' },
 ];
 
+// Auto variants keep their longer labels; concrete codes use the Chinese display name
+const displayName = (lang: Language) =>
+  lang.code.startsWith('auto') ? lang.name : languageDisplayName(lang.code);
+
 interface LanguageSelectionProps {
   selectedLanguage: string;
   onLanguageChange: (language: string) => void;
@@ -146,7 +151,7 @@ export function LanguageSelection({
       });
 
       // Show success toast
-      const languageName = selectedLang?.name || languageCode;
+      const languageName = selectedLang ? displayName(selectedLang) : languageCode;
       toast.success("语言偏好已保存", {
         description: `转写语言已设置为 ${languageName}`
       });
@@ -161,9 +166,10 @@ export function LanguageSelection({
   };
 
   // Find the selected language name for display
-  const selectedLanguageName = LANGUAGES.find(
+  const selectedLang = LANGUAGES.find(
     lang => lang.code === selectedLanguage
-  )?.name || '自动检测（原语言）';
+  );
+  const selectedLanguageName = selectedLang ? displayName(selectedLang) : '自动检测（原语言）';
 
   return (
     <div className="space-y-4">
@@ -183,7 +189,7 @@ export function LanguageSelection({
         >
           {LANGUAGES.map((language) => (
             <option key={language.code} value={language.code}>
-              {language.name}
+              {displayName(language)}
               {language.code !== 'auto' && language.code !== 'auto-translate' && ` (${language.code})`}
             </option>
           ))}

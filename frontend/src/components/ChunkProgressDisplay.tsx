@@ -41,17 +41,16 @@ export function ChunkProgressDisplay({
     : 0;
 
   const formatDuration = (ms: number) => {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
 
-    if (hours > 0) {
-      return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds % 60}s`;
-    } else {
-      return `${seconds}s`;
-    }
+    const parts: string[] = [];
+    if (hours > 0) parts.push(`${hours} 小时`);
+    if (minutes > 0) parts.push(`${minutes} 分`);
+    if (seconds > 0) parts.push(`${seconds} 秒`);
+    return parts.join(' ') || '0 秒';
   };
 
   const formatTimeRemaining = (ms?: number) => {
