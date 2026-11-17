@@ -14,11 +14,6 @@ const PROVIDER_COMMANDS: Record<string, ProviderCommands> = {
     hasAvailableModels: 'whisper_has_available_models',
     getAvailableModels: 'whisper_get_available_models',
   },
-  parakeet: {
-    initialize: 'parakeet_init',
-    hasAvailableModels: 'parakeet_has_available_models',
-    getAvailableModels: 'parakeet_get_available_models',
-  },
 };
 
 export function getProviderCommands(provider: string): ProviderCommands | null {

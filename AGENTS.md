@@ -6,7 +6,7 @@ These instructions apply to AI coding agents working in this repository.
 
 - Meetily is a desktop application for recording meetings, transcribing audio, and generating summaries.
 - The supported app lives in `frontend/`: Next.js/React provides the UI, and the Rust/Tauri core handles native behavior, audio, persistence, transcription, and summary orchestration.
-- Local transcription uses Whisper or Parakeet. Summaries use the configured local or cloud provider; do not assume every provider runs locally.
+- Local transcription uses Whisper. Summaries use the configured local or cloud provider; do not assume every provider runs locally.
 - Frontend code invokes Tauri commands; Rust emits events that update frontend state. Preserve existing command contracts, event payloads, and state ownership.
 - `backend/` is an unsupported legacy archive, not a runtime dependency or a place to add new application behavior. Its FastAPI/CORS behavior is not a supported production API.
 
@@ -58,7 +58,6 @@ See [build and platform setup](docs/BUILDING.md), [development commands and debu
 | Recording output | [recording_saver.rs](frontend/src-tauri/src/audio/recording_saver.rs) |
 | Transcription providers and workers | [transcription/](frontend/src-tauri/src/audio/transcription/) |
 | Whisper model loading and acceleration | [whisper_engine/](frontend/src-tauri/src/whisper_engine/) |
-| Parakeet model loading and inference | [parakeet_engine/](frontend/src-tauri/src/parakeet_engine/) |
 | Summary providers and orchestration | [summary/](frontend/src-tauri/src/summary/) |
 | Recording UI and shared frontend state | [page.tsx](frontend/src/app/page.tsx), [SidebarProvider.tsx](frontend/src/components/Sidebar/SidebarProvider.tsx), [RecordingStateContext.tsx](frontend/src/contexts/RecordingStateContext.tsx) |
 

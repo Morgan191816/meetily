@@ -3517,7 +3517,6 @@ dependencies = [
  "objc",
  "once_cell",
  "open",
- "ort",
  "rand 0.8.6",
  "rayon",
  "realfft",

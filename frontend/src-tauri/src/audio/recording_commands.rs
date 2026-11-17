@@ -449,13 +449,6 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         return Err("Recording already in progress".to_string());
     }
 
-    if let Err(error) = crate::ensure_onnx_runtime_available() {
-        return Err(map_recording_start_error(
-            &app,
-            RecordingStartError::TranscriptionRuntime(error),
-        ));
-    }
-
     // Validate that transcription models are available before starting recording
     info!("🔍 Validating transcription model availability before starting recording...");
     if let Err(validation_error) = transcription::validate_transcription_model_ready(&app).await {
@@ -675,13 +668,6 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     info!("🔍 IS_RECORDING state check: {}", current_recording_state);
     if current_recording_state || IS_RECORDING_STOPPING.load(Ordering::SeqCst) {
         return Err("Recording already in progress".to_string());
-    }
-
-    if let Err(error) = crate::ensure_onnx_runtime_available() {
-        return Err(map_recording_start_error(
-            &app,
-            RecordingStartError::TranscriptionRuntime(error),
-        ));
     }
 
     // Validate that transcription models are available before starting recording
@@ -1023,81 +1009,29 @@ async fn stop_recording_for_session<R: Runtime>(
 
     info!("🧠 All transcript chunks processed. Now safely unloading transcription model...");
 
-    // Determine which provider was used and unload the appropriate model (with timeout)
-    let config = match tokio::time::timeout(
-        tokio::time::Duration::from_secs(30), // 30 seconds max for DB operation
-        crate::api::api::api_get_transcript_config(
-            app.clone(),
-            app.clone().state(),
-            None,
-        )
-    )
-    .await
-    {
-        Ok(Ok(Some(config))) => Some(config.provider),
-        Ok(Ok(None)) => None,
-        Ok(Err(e)) => {
-            warn!("⚠️ Failed to get transcript config: {:?}", e);
-            None
-        }
-        Err(_) => {
-            warn!("⏱️ Transcript config timeout (30s), continuing shutdown");
-            None
-        }
+    // Unload the Whisper model after all chunks are processed
+    info!("🎤 Unloading Whisper model...");
+    let engine_clone = {
+        let engine_guard = crate::whisper_engine::commands::WHISPER_ENGINE
+            .lock()
+            .unwrap();
+        engine_guard.as_ref().cloned()
     };
 
-    match config.as_deref() {
-        Some("parakeet") => {
-            info!("🦜 Unloading Parakeet model...");
-            let engine_clone = {
-                let engine_guard = crate::parakeet_engine::commands::PARAKEET_ENGINE
-                    .lock()
-                    .unwrap();
-                engine_guard.as_ref().cloned()
-            };
+    if let Some(engine) = engine_clone {
+        let current_model = engine
+            .get_current_model()
+            .await
+            .unwrap_or_else(|| "unknown".to_string());
+        info!("Current Whisper model before unload: '{}'", current_model);
 
-            if let Some(engine) = engine_clone {
-                let current_model = engine
-                    .get_current_model()
-                    .await
-                    .unwrap_or_else(|| "unknown".to_string());
-                info!("Current Parakeet model before unload: '{}'", current_model);
-
-                if engine.unload_model().await {
-                    info!("✅ Parakeet model '{}' unloaded successfully", current_model);
-                } else {
-                    warn!("⚠️ Failed to unload Parakeet model '{}'", current_model);
-                }
-            } else {
-                warn!("⚠️ No Parakeet engine found to unload model");
-            }
+        if engine.unload_model().await {
+            info!("✅ Whisper model '{}' unloaded successfully", current_model);
+        } else {
+            warn!("⚠️ Failed to unload Whisper model '{}'", current_model);
         }
-        _ => {
-            // Default to Whisper
-            info!("🎤 Unloading Whisper model...");
-            let engine_clone = {
-                let engine_guard = crate::whisper_engine::commands::WHISPER_ENGINE
-                    .lock()
-                    .unwrap();
-                engine_guard.as_ref().cloned()
-            };
-
-            if let Some(engine) = engine_clone {
-                let current_model = engine
-                    .get_current_model()
-                    .await
-                    .unwrap_or_else(|| "unknown".to_string());
-                info!("Current Whisper model before unload: '{}'", current_model);
-
-                if engine.unload_model().await {
-                    info!("✅ Whisper model '{}' unloaded successfully", current_model);
-                } else {
-                    warn!("⚠️ Failed to unload Whisper model '{}'", current_model);
-                }
-            } else {
-                warn!("⚠️ No Whisper engine found to unload model");
-            }
-        }
+    } else {
+        warn!("⚠️ No Whisper engine found to unload model");
     }
 
     // Step 3.5: Track meeting ended analytics with privacy-safe metadata
