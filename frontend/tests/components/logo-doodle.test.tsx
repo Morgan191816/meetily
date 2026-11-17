@@ -80,7 +80,7 @@ test('a new doodle path retries after an image failure', async () => {
 test('expanded logo keeps its text even when a doodle is available', async () => {
   await act(async () => { renderer = create(<Logo isCollapsed={false} doodlePath="/tmp/doodle.png" doodleDate="2026-11-09" />); });
   expect(renderer!.root.findAllByType('img')).toHaveLength(0);
-  expect(renderer!.root.findByType('button').props['aria-label']).toBe('About Morgan Meet');
+  expect(renderer!.root.findByType('button').props['aria-label']).toBe('关于 Morgan Meet');
   expect(renderer!.root.findByType('button').findByType('span').children).toEqual(['Morgan Meet']);
 });
 
