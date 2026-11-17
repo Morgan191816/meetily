@@ -162,7 +162,7 @@ pub async fn get_or_init_transcription_engine<R: Runtime>(
             Ok(TranscriptionEngine::Whisper(whisper_engine))
         }
         other => {
-            warn!("provider '{}' 不再支持，回退到 localWhisper", other);
+            warn!("Provider '{}' was normalized or is unsupported; falling back to localWhisper", other);
             let whisper_engine = get_or_init_whisper(app).await?;
             Ok(TranscriptionEngine::Whisper(whisper_engine))
         }

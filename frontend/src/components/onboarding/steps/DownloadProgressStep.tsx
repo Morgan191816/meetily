@@ -200,7 +200,7 @@ export function DownloadProgressStep() {
     // Show toast if downloads still in progress
     if (!downloadsComplete) {
       toast.info('Downloads will continue in the background', {
-        description: 'You can start using the app. Summary generation will be available once the model is ready.',
+        description: 'You can start using the app. Summary generation will be available once the model is ready. The Whisper transcription model can be downloaded later in Settings → Transcription.',
         duration: 5000,
       });
     }
@@ -320,7 +320,7 @@ export function DownloadProgressStep() {
   return (
     <OnboardingContainer
       title="Getting things ready"
-      description="You can start using Morgan Meet while the Summary Engine downloads."
+      description="You can start using Morgan Meet while the Summary Engine downloads. The Whisper transcription model can be downloaded later in Settings → Transcription."
       step={3}
       totalSteps={isMac ? 4 : 3}
     >

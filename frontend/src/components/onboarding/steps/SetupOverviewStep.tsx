@@ -29,11 +29,6 @@ export function SetupOverviewStep() {
   const steps = [
     {
       number: 1,
-      type: 'transcription',
-      title: 'Download Transcription Engine',
-    },
-    {
-      number: 2,
       type: 'summarization',
       title: 'Download Summarization Engine',
     },
@@ -46,7 +41,7 @@ export function SetupOverviewStep() {
   return (
     <OnboardingContainer
       title="Setup Overview"
-      description="Morgan Meet requires that you download the Transcription & Summarization AI models for the software to work."
+      description="Morgan Meet will download the Summarization AI model. The Transcription model can be downloaded later in Settings → Transcription."
       step={2}
       totalSteps={isMac ? 4 : 3}
     >

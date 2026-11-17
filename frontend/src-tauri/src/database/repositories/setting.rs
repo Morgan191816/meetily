@@ -28,7 +28,7 @@ pub struct SettingsRepository;
 /// `parakeet` saved; that engine was removed, so fall back to local Whisper.
 fn normalize_transcript_provider(provider: &str, model: &str) -> crate::api::api::TranscriptConfig {
     if provider == "parakeet" {
-        log::warn!("parakeet 已移除，回退到 localWhisper");
+        log::warn!("parakeet provider was removed; falling back to localWhisper");
         return crate::api::api::TranscriptConfig {
             provider: "localWhisper".to_string(),
             model: crate::config::DEFAULT_WHISPER_MODEL.to_string(),

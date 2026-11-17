@@ -1,7 +1,8 @@
 {
   "bundle": {
     "resources": {
-      "templates": "templates"
+      "templates": "templates",
+      "binaries/onnxruntime": "."
     }
   }
 }
