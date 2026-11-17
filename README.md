@@ -273,7 +273,9 @@ Thanks for all the contributions. Our community is what makes this project possi
 
 ## License
 
-MIT License - Feel free to use this project for your own purposes.
+Morgan Meet is released under the MIT License; see [LICENSE.md](LICENSE.md). It is based on [Meetily](https://github.com/Zackriya-Solutions/meetily), also MIT licensed, Copyright (c) 2024 Zackriya Solutions.
+
+Bundled and linked third-party components and their licenses are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Acknowledgments
 
