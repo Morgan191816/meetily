@@ -1,14 +1,22 @@
 import { formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 
-export function formatDate(input: Date | string): string {
-  return new Date(input).toLocaleDateString('zh-CN')
+function toValidDate(input: Date | string | number): Date | null {
+  const d = new Date(input)
+  return Number.isNaN(d.getTime()) ? null : d
 }
 
-export function formatDateTime(input: Date | string): string {
-  return new Date(input).toLocaleString('zh-CN')
+export function formatDate(input: Date | string | number): string {
+  const d = toValidDate(input)
+  return d ? d.toLocaleDateString('zh-CN') : ''
 }
 
-export function formatRelative(input: Date | string): string {
-  return formatDistanceToNow(new Date(input), { addSuffix: true, locale: zhCN })
+export function formatDateTime(input: Date | string | number): string {
+  const d = toValidDate(input)
+  return d ? d.toLocaleString('zh-CN') : ''
+}
+
+export function formatRelative(input: Date | string | number): string {
+  const d = toValidDate(input)
+  return d ? formatDistanceToNow(d, { addSuffix: true, locale: zhCN }) : ''
 }

@@ -560,7 +560,7 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
 
   const convertToMarkdown = () => {
     let markdown = `# AI Generated Summary of Meeting: ${meeting?.id || 'Unknown'} - ${meeting?.title || 'Untitled Meeting'}\n\n`;
-    markdown += `## Date: ${formatDate(meeting?.created_at ?? new Date())}\n\n`;
+    markdown += `## Date: ${formatDate(meeting?.created_at || new Date())}\n\n`;
     
     Object.entries(currentSummary).forEach(([key, section]) => {
       if (key === 'title') {

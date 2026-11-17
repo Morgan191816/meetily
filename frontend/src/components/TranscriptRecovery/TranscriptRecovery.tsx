@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { formatRelative } from '@/lib/date';
+import { formatDateTime, formatRelative } from '@/lib/date';
 import { AlertCircle, CheckCircle2, Clock, FileText, Trash2, XCircle } from 'lucide-react';
 import {
   Dialog,
@@ -179,7 +179,7 @@ export function TranscriptRecovery({
                   <div className="p-4 border-b bg-muted/50">
                     <h4 className="font-semibold">{selectedMeeting.title}</h4>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Started {new Date(selectedMeeting.startTime).toLocaleString()}
+                      Started {formatDateTime(new Date(selectedMeeting.startTime))}
                     </p>
                     <div className="flex items-center gap-4 mt-2 text-sm">
                       <span className="flex items-center gap-1">
@@ -229,7 +229,7 @@ export function TranscriptRecovery({
                                 }
                                 return '--:--';
                               }
-                              return date.toLocaleTimeString();
+                              return date.toLocaleTimeString('zh-CN');
                             } catch {
                               return '--:--';
                             }
