@@ -16,12 +16,6 @@ jobs:
         with:
           toolchain: 1.99.1
       - uses: Swatinem/rust-cache@v2
-      # tauri-build 的 build script 校验 resources，缺 sidecar 会让整个 workspace 编译失败
-      - name: stage llama-helper sidecar
-        run: |
-          cargo build -p llama-helper
-          mkdir -p frontend/src-tauri/binaries
-          cp target/debug/llama-helper.exe frontend/src-tauri/binaries/llama-helper-x86_64-pc-windows-msvc.exe
       # test_get_output_device 需要真实音频输出设备，GitHub runner 上失败并让整个 lib 测试进程 AV 崩溃
       # runner 的 PATH 里另有一个 1.17.1 的 onnxruntime.dll，会让 ort(1.22.x) 初始化失败；
       # 把 build script 下载的 1.22 放到测试 exe 同目录，Windows 先搜应用目录再搜 PATH

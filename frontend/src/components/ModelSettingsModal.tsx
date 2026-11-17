@@ -3,7 +3,6 @@ import { useSidebar } from './Sidebar/SidebarProvider';
 import { invoke } from '@tauri-apps/api/core';
 import { Button } from '@/components/ui/button';
 import { useOllamaDownload } from '@/contexts/OllamaDownloadContext';
-import { BuiltInModelManager } from '@/components/BuiltInModelManager';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useConfig } from '@/contexts/ConfigContext';
@@ -31,7 +30,7 @@ import { cn, isOllamaNotInstalledError } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export interface ModelConfig {
-  provider: 'ollama' | 'groq' | 'claude' | 'openai' | 'openrouter' | 'builtin-ai' | 'custom-openai';
+  provider: 'ollama' | 'groq' | 'claude' | 'openai' | 'openrouter' | 'custom-openai';
   model: string;
   whisperModel: string;
   apiKey?: string | null;
@@ -106,7 +105,6 @@ interface ModelSettingsModalProps {
   setModelConfig: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
   onSave: (config: ModelConfig) => void;
   skipInitialFetch?: boolean; // Optional: skip fetching config from backend if parent manages it
-  layout?: 'inline' | 'dialog';
 }
 
 async function openOllamaDownload() {
@@ -123,7 +121,6 @@ export function ModelSettingsModal({
   setModelConfig: propsSetModelConfig,
   onSave,
   skipInitialFetch = false,
-  layout = 'inline',
 }: ModelSettingsModalProps) {
   // Use ConfigContext if available, fallback to props for backward compatibility
   const configContext = useConfig();
@@ -177,9 +174,6 @@ export function ModelSettingsModal({
 
   // Use global download context instead of local state
   const { isDownloading, getProgress, downloadingModels } = useOllamaDownload();
-
-  // Built-in AI models state
-  const [builtinAiModels, setBuiltinAiModels] = useState<any[]>([]);
 
   // Cache models by endpoint to avoid refetching when reverting endpoint changes
   const modelsCache = useRef<Map<string, OllamaModel[]>>(new Map());
@@ -238,7 +232,6 @@ export function ModelSettingsModal({
     groq: groqModels.length > 0 ? groqModels : GROQ_FALLBACK_MODELS,
     openai: openaiModels.length > 0 ? openaiModels : OPENAI_FALLBACK_MODELS,
     openrouter: openRouterModels.map((m) => m.id),
-    'builtin-ai': builtinAiModels.map((m) => m.name),
     'custom-openai': customOpenAIModel ? [customOpenAIModel] : [], // User specifies model manually
   };
 
@@ -512,26 +505,6 @@ export function ModelSettingsModal({
     }
   };
 
-  const loadBuiltinAiModels = async () => {
-    if (builtinAiModels.length > 0) return; // Already loaded
-
-    try {
-      const data = (await invoke('builtin_ai_list_models')) as any[];
-      setBuiltinAiModels(data);
-
-      // Auto-select first available model if none selected
-      if (data.length > 0 && !modelConfig.model) {
-        const firstAvailable = data.find((m: any) => m.status?.type === 'available');
-        if (firstAvailable) {
-          setModelConfig((prev: ModelConfig) => ({ ...prev, model: firstAvailable.name }));
-        }
-      }
-    } catch (err) {
-      console.error('Error loading Built-in AI models:', err);
-      toast.error('Failed to load Built-in AI models');
-    }
-  };
-
   // Fetch OpenAI models from API
   const loadOpenAIModels = async (key: string | null) => {
     if (!key?.trim()) {
@@ -621,7 +594,7 @@ export function ModelSettingsModal({
     if (cachedModel && providerModels.includes(cachedModel)) {
       setModelConfig((prev: ModelConfig) => ({ ...prev, model: cachedModel }));
     }
-  }, [models, openRouterModels, builtinAiModels, openaiModels, claudeModels, groqModels, modelConfig.provider]);
+  }, [models, openRouterModels, openaiModels, claudeModels, groqModels, modelConfig.provider]);
 
   const handleSave = async () => {
     // For custom-openai provider, save the custom config first
@@ -857,11 +830,6 @@ export function ModelSettingsModal({
                   loadOpenRouterModels();
                 }
 
-                // Load Built-in AI models when selected
-                if (provider === 'builtin-ai') {
-                  loadBuiltinAiModels();
-                }
-
                 // Load custom OpenAI config when selected
                 if (provider === 'custom-openai') {
                   invoke<any>('api_get_custom_openai_config').then((config) => {
@@ -883,7 +851,6 @@ export function ModelSettingsModal({
                 <SelectValue placeholder="Select provider" />
               </SelectTrigger>
               <SelectContent className="max-h-64 overflow-y-auto">
-                <SelectItem value="builtin-ai">Built-in AI (Offline, No API needed)</SelectItem>
                 <SelectItem value="claude">Claude</SelectItem>
                 <SelectItem value="custom-openai">Custom Server (OpenAI)</SelectItem>
                 <SelectItem value="groq">Groq</SelectItem>
@@ -893,7 +860,7 @@ export function ModelSettingsModal({
               </SelectContent>
             </Select>
 
-            {modelConfig.provider !== 'builtin-ai' && modelConfig.provider !== 'custom-openai' && (
+            {modelConfig.provider !== 'custom-openai' && (
               <Popover open={modelComboboxOpen} onOpenChange={setModelComboboxOpen} modal={true}>
                 <PopoverTrigger asChild>
                   <Button
@@ -1367,18 +1334,6 @@ export function ModelSettingsModal({
           </div>
         )}
 
-        {/* Built-in AI Models Section */}
-        {modelConfig.provider === 'builtin-ai' && (
-          <div className="mt-6">
-            <BuiltInModelManager
-              selectedModel={modelConfig.model}
-              layout={layout}
-              onModelSelect={(model) =>
-                setModelConfig((prev: ModelConfig) => ({ ...prev, model }))
-              }
-            />
-          </div>
-        )}
       </div>
 
       {/* Auto-generate summaries toggle */}

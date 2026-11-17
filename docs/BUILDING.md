@@ -22,31 +22,7 @@ Frozen installation keeps the lockfile and installed dependency set aligned. Whe
 
 ### First-run sidecar setup
 
-Installing frontend dependencies does not prepare `llama-helper`. The desktop dev/build commands expect this sidecar to be staged first. Repeat preparation if the staged binary is removed or the build target changes.
-
-From the repository root, build the helper and inspect the native host target:
-
-```bash
-cargo build -p llama-helper
-rustc -vV
-```
-
-Use the value printed after `host:` as `<host-triple>` below. If the helper build fails, stop: do not copy a binary or launch Tauri.
-
-Create `frontend/src-tauri/binaries/`, then copy the built executable using the paths for your platform, relative to the repository root. Replace `<host-triple>` with the actual value printed by `rustc`, not the literal placeholder:
-
-| Platform | Built executable | Staged destination |
-| --- | --- | --- |
-| macOS/Linux | `target/debug/llama-helper` | `frontend/src-tauri/binaries/llama-helper-<host-triple>` |
-| Windows | `target/debug/llama-helper.exe` | `frontend/src-tauri/binaries/llama-helper-<host-triple>.exe` |
-
-For a production build, run `cargo build -p llama-helper --release` and copy the executable from `target/release/` to the same target-suffixed destination, only after the build succeeds.
-
-These commands build the helper without an explicit GPU backend. Its optional acceleration features are `metal`, `cuda`, and `vulkan`, each requiring a compatible platform and toolchain. Do not forward Whisper's `coreml`, `hipblas`, or `openblas` flags to the helper.
-
-These paths assume an ordinary native-host workspace build. With a custom Cargo output directory or cross-compilation, copy from the actual configured output and use the actual build target as the suffix instead of the `rustc` host.
-
-After staging the helper, run application commands from `frontend/` with dependencies installed:
+Run application commands from `frontend/` with dependencies installed:
 
 | Command | Purpose |
 | --- | --- |
@@ -134,9 +110,7 @@ The build scripts (`dev-gpu.sh` and `build-gpu.sh`) orchestrate the entire build
 
 1.  **Detect location:** Find `package.json` (works from project root or `frontend/`)
 2.  **Auto-detect GPU:** Run `scripts/auto-detect-gpu.js` (or use `TAURI_GPU_FEATURE` if set)
-3.  **Build Sidecar:** Build `llama-helper` with the detected feature (debug or release)
-4.  **Copy Binary:** Copy the built sidecar to `src-tauri/binaries` with the target triple
-5.  **Run Tauri:** Call `npm run tauri:dev` or `tauri:build` with the feature flag passed via env var
+3.  **Run Tauri:** Call `npm run tauri:dev` or `tauri:build` with the feature flag passed via env var
 
 #### Detection Priority
 

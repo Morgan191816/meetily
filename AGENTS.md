@@ -16,8 +16,6 @@ See [architecture and audio pipeline](docs/architecture.md), including [frontend
 
 Use pnpm 9.15.9. Run these commands from `frontend/`:
 
-Before running desktop dev/build commands, complete the [first-run sidecar setup](docs/BUILDING.md#first-run-sidecar-setup). Installing frontend dependencies alone does not stage `llama-helper`.
-
 | Command | Purpose |
 | --- | --- |
 | `pnpm install --frozen-lockfile` | Install the committed dependency set |

@@ -1,7 +1,6 @@
 use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
-use std::path::PathBuf;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use log::{info, warn};
@@ -218,7 +217,6 @@ pub enum LLMProvider {
     Groq,
     Ollama,
     OpenRouter,
-    BuiltInAI,
     CustomOpenAI,
 }
 
@@ -231,7 +229,10 @@ impl LLMProvider {
             "groq" => Ok(Self::Groq),
             "ollama" => Ok(Self::Ollama),
             "openrouter" => Ok(Self::OpenRouter),
-            "builtin-ai" | "local-llama" | "localllama" => Ok(Self::BuiltInAI),
+            "builtin-ai" | "local-llama" | "localllama" => {
+                log::warn!("builtin-ai 已移除，回退到 custom-openai");
+                Ok(Self::CustomOpenAI)
+            }
             "custom-openai" => Ok(Self::CustomOpenAI),
             _ => Err(format!("Unsupported LLM provider: {}", s)),
         }
@@ -252,7 +253,6 @@ impl LLMProvider {
 /// * `max_tokens` - Optional max tokens (for CustomOpenAI provider)
 /// * `temperature` - Optional temperature (for CustomOpenAI provider)
 /// * `top_p` - Optional top_p (for CustomOpenAI provider)
-/// * `app_data_dir` - Optional app data directory (for BuiltInAI provider)
 /// * `cancellation_token` - Optional token to cancel the request
 ///
 /// The generated visible content and whether private reasoning was removed.
@@ -268,7 +268,6 @@ pub(crate) async fn generate_summary(
     max_tokens: Option<u32>,
     temperature: Option<f32>,
     top_p: Option<f32>,
-    app_data_dir: Option<&PathBuf>,
     cancellation_token: Option<&CancellationToken>,
 ) -> Result<LlmCompletion, String> {
     // Check if cancelled before starting
@@ -276,26 +275,6 @@ pub(crate) async fn generate_summary(
         if token.is_cancelled() {
             return Err("Summary generation was cancelled".to_string());
         }
-    }
-
-    // Handle BuiltInAI provider separately (uses local sidecar, no HTTP API)
-    if provider == &LLMProvider::BuiltInAI {
-        let app_data_dir = app_data_dir
-            .ok_or_else(|| "app_data_dir is required for BuiltInAI provider".to_string())?;
-
-        return crate::summary::summary_engine::generate_with_builtin(
-            app_data_dir,
-            model_name,
-            system_prompt,
-            user_prompt,
-            cancellation_token,
-        )
-        .await
-        .map(|content| LlmCompletion {
-            content,
-            reasoning_stripped: false,
-        })
-        .map_err(|e| e.to_string());
     }
 
     let (api_url, mut headers) = match provider {
@@ -343,10 +322,6 @@ pub(crate) async fn generate_summary(
                     .map_err(|_| "Invalid anthropic version".to_string())?,
             );
             ("https://api.anthropic.com/v1/messages".to_string(), header_map)
-        }
-        LLMProvider::BuiltInAI => {
-            // This case is handled earlier with early returns
-            unreachable!("BuiltInAI is handled before this match statement")
         }
     };
 
@@ -580,6 +555,14 @@ mod tests {
     }
 
     #[test]
+    fn builtin_ai_falls_back_to_custom_openai() {
+        assert_eq!(
+            LLMProvider::from_str("builtin-ai").unwrap(),
+            LLMProvider::CustomOpenAI
+        );
+    }
+
+    #[test]
     fn only_ollama_disables_reasoning_and_custom_sampling_is_preserved() {
         for provider in [
             LLMProvider::OpenAI,
@@ -693,7 +676,6 @@ mod tests {
             None,
             None,
             None,
-            None,
         )
         .await
         .expect_err("custom provider failure should preserve its response body");
@@ -772,7 +754,6 @@ mod tests {
             "system",
             "user",
             Some(&endpoint),
-            None,
             None,
             None,
             None,
@@ -862,7 +843,6 @@ mod tests {
             None,
             None,
             None,
-            None,
             Some(&cancellation_token),
         );
         tokio::pin!(generation);
@@ -940,7 +920,6 @@ mod tests {
                 None,
                 None,
                 None,
-                None,
                 Some(&cancellation_token),
             ),
         )
@@ -985,7 +964,6 @@ fn provider_name(provider: &LLMProvider) -> &str {
         LLMProvider::Claude => "Claude",
         LLMProvider::Groq => "Groq",
         LLMProvider::Ollama => "Ollama",
-        LLMProvider::BuiltInAI => "Built-in AI",
         LLMProvider::OpenRouter => "OpenRouter",
         LLMProvider::CustomOpenAI => "Custom OpenAI",
     }

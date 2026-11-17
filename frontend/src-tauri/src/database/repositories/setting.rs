@@ -42,6 +42,17 @@ fn normalize_transcript_provider(provider: &str, model: &str) -> crate::api::api
     }
 }
 
+/// Map a stored summary provider to a supported one. Old installs may still have
+/// `builtin-ai` saved; that engine was removed, so fall back to the custom OpenAI
+/// provider (matches `LLMProvider::from_str`).
+fn normalize_summary_provider(provider: &str) -> String {
+    if provider == "builtin-ai" || provider == "local-llama" || provider == "localllama" {
+        log::warn!("builtin-ai provider was removed; falling back to custom-openai");
+        return "custom-openai".to_string();
+    }
+    provider.to_string()
+}
+
 // Transcript providers: localWhisper, deepgram, elevenLabs, groq, openai
 // Summary providers: openai, claude, ollama, groq, added openrouter
 // NOTE: Handle data exclusion in the higher layer as this is database abstraction layer(using SELECT *)
@@ -53,7 +64,10 @@ impl SettingsRepository {
         let setting = sqlx::query_as::<_, Setting>("SELECT * FROM settings LIMIT 1")
             .fetch_optional(pool)
             .await?;
-        Ok(setting)
+        Ok(setting.map(|mut setting| {
+            setting.provider = normalize_summary_provider(&setting.provider);
+            setting
+        }))
     }
 
     pub async fn save_model_config(
@@ -103,7 +117,6 @@ impl SettingsRepository {
             "ollama" => "ollamaApiKey",
             "groq" => "groqApiKey",
             "openrouter" => "openRouterApiKey",
-            "builtin-ai" => return Ok(()), // No API key needed
             _ => {
                 return Err(sqlx::Error::Protocol(
                     format!("Invalid provider: {}", provider).into(),
@@ -141,7 +154,6 @@ impl SettingsRepository {
             "groq" => "groqApiKey",
             "claude" => "anthropicApiKey",
             "openrouter" => "openRouterApiKey",
-            "builtin-ai" => return Ok(None), // No API key needed
             _ => {
                 return Err(sqlx::Error::Protocol(
                     format!("Invalid provider: {}", provider).into(),
@@ -269,7 +281,6 @@ impl SettingsRepository {
             "groq" => "groqApiKey",
             "claude" => "anthropicApiKey",
             "openrouter" => "openRouterApiKey",
-            "builtin-ai" => return Ok(()), // No API key needed
             _ => {
                 return Err(sqlx::Error::Protocol(
                     format!("Invalid provider: {}", provider).into(),
@@ -376,5 +387,11 @@ mod tests {
         let cfg = normalize_transcript_provider("parakeet", "parakeet-tdt-0.6b-v3-int8");
         assert_eq!(cfg.provider, "localWhisper");
         assert_eq!(cfg.model, crate::config::DEFAULT_WHISPER_MODEL);
+    }
+
+    #[test]
+    fn builtin_ai_provider_falls_back_to_custom_openai() {
+        assert_eq!(normalize_summary_provider("builtin-ai"), "custom-openai");
+        assert_eq!(normalize_summary_provider("ollama"), "ollama");
     }
 }

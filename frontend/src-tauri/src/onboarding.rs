@@ -1,11 +1,8 @@
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_store::StoreExt;
-use log::{info, warn, error};
+use log::{info, warn};
 use anyhow::Result;
-
-use crate::state::AppState;
-use crate::database::repositories::setting::SettingsRepository;
 
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -13,15 +10,7 @@ pub struct OnboardingStatus {
     pub version: String,
     pub completed: bool,
     pub current_step: u8,
-    pub model_status: ModelStatus,
     pub last_updated: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
-pub struct ModelStatus {
-    pub summary: String,   // Generic field for summary model (Qwen 3.5 or legacy Gemma variants)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub selected_summary_model: Option<String>,
 }
 
 impl Default for OnboardingStatus {
@@ -30,10 +19,6 @@ impl Default for OnboardingStatus {
             version: "1.0".to_string(),
             completed: false,
             current_step: 1,
-            model_status: ModelStatus {
-                summary: "not_downloaded".to_string(),  // Changed from gemma
-                selected_summary_model: None,
-            },
             last_updated: chrono::Utc::now().to_rfc3339(),
         }
     }
@@ -168,42 +153,21 @@ pub async fn reset_onboarding_status_cmd<R: Runtime>(
 #[tauri::command]
 pub async fn complete_onboarding<R: Runtime>(
     app: AppHandle<R>,
-    state: tauri::State<'_, AppState>,
-    model: String,
 ) -> Result<(), String> {
-    info!("Completing onboarding with builtin-ai model: {}", model);
+    info!("Completing onboarding");
 
-    // Step 1: Save model configuration to SQLite database FIRST
-    let pool = state.db_manager.pool();
-
-    // Onboarding always uses builtin-ai (local LLM)
-    if let Err(e) = SettingsRepository::save_model_config(
-        pool,
-        "builtin-ai",
-        &model,
-        "large-v3",
-        None,
-    ).await {
-        error!("Failed to save builtin-ai model config: {}", e);
-        return Err(format!("Failed to save builtin-ai model config: {}", e));
-    }
-    info!("Saved builtin-ai model config: model={}", model);
-
-    // Step 2: Only NOW mark onboarding as complete (after DB operations succeed)
     let mut status = load_onboarding_status(&app)
         .await
         .map_err(|e| format!("Failed to load onboarding status: {}", e))?;
 
     status.completed = true;
-    status.current_step = 4; // Max step (4 on macOS with permissions, 3 on other platforms)
-    status.model_status.summary = "downloaded".to_string();
-    status.model_status.selected_summary_model = Some(model.clone());
+    status.current_step = 3; // Max step (3 on macOS with permissions, 2 on other platforms)
 
     save_onboarding_status(&app, &status)
         .await
         .map_err(|e| format!("Failed to save completed onboarding status: {}", e))?;
 
-    info!("Onboarding completed successfully with model: {}", model);
+    info!("Onboarding completed successfully");
     Ok(())
 }
 
@@ -212,7 +176,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn onboarding_status_deserializes_without_selected_summary_model() {
+    fn onboarding_status_ignores_removed_model_status() {
         let status: OnboardingStatus = serde_json::from_str(
             r#"{
                 "version": "1.0",
@@ -227,6 +191,6 @@ mod tests {
         )
         .expect("old onboarding status should remain compatible");
 
-        assert_eq!(status.model_status.selected_summary_model, None);
+        assert!(status.completed);
     }
 }

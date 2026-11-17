@@ -208,19 +208,6 @@ jobs:
           cd frontend
           pnpm install --frozen-lockfile
 
-      - name: Build llama-helper sidecar
-        run: |
-          echo "Building llama-helper sidecar (CPU mode)..."
-          # llama.cpp's bundled cpp-httplib does not compile against OpenSSL 4 (const X509_NAME); the helper never uses HTTPS, so build it without OpenSSL.
-          CMAKE_DISABLE_FIND_PACKAGE_OpenSSL=TRUE cargo build --release -p llama-helper
-          
-          # Copy binary to binaries directory
-          mkdir -p frontend/src-tauri/binaries
-          cp target/release/llama-helper frontend/src-tauri/binaries/llama-helper-x86_64-unknown-linux-gnu
-          
-          echo "Copied llama-helper to frontend/src-tauri/binaries/"
-          ls -la frontend/src-tauri/binaries/
-
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:

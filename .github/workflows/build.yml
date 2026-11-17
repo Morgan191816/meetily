@@ -159,7 +159,7 @@ jobs:
           directory = Path('target') / target / os.environ['PORTABLE_BUILD_PROFILE']
           config = Path(os.environ['RUNNER_TEMP']) / 'tauri.linux-portable.conf.json'
           config.write_text(json.dumps({'build': {'beforeBundleCommand': {
-              'script': f'node .github/verify-portable-ggml.cjs {directory} --require-llama',
+              'script': f'node .github/verify-portable-ggml.cjs {directory}',
               'cwd': os.environ['GITHUB_WORKSPACE'],
           }}}))
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
@@ -551,65 +551,6 @@ jobs:
           fi
 
           echo "features=$FEATURES" >> "$GITHUB_OUTPUT"
-
-      - name: Build llama-helper sidecar (Windows)
-        if: contains(inputs.platform, 'windows')
-        shell: pwsh
-        run: |
-          # Build llama-helper without GPU features (CPU-only)
-          # Note: Vulkan build has CMake race condition issues with llama-cpp-sys-2
-          # The Tauri app itself uses whisper-rs with Vulkan for transcription
-          # llama-helper is for LLM inference and works fine on CPU
-          Write-Host "Building llama-helper sidecar (CPU-only)..."
-
-          # llama.cpp's bundled cpp-httplib does not compile against OpenSSL 4 (const X509_NAME); the helper never uses HTTPS, so build it without OpenSSL.
-          $env:CMAKE_DISABLE_FIND_PACKAGE_OpenSSL = "TRUE"
-          cargo build --release -p llama-helper
-
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Failed to build llama-helper"
-            exit $LASTEXITCODE
-          }
-
-          # Copy binary to binaries directory
-          New-Item -ItemType Directory -Force -Path "frontend/src-tauri/binaries" | Out-Null
-          Copy-Item "target/release/llama-helper.exe" -Destination "frontend/src-tauri/binaries/llama-helper-x86_64-pc-windows-msvc.exe"
-
-          Write-Host "Copied llama-helper to frontend/src-tauri/binaries/"
-          Get-ChildItem "frontend/src-tauri/binaries/"
-
-      - name: Build llama-helper sidecar (macOS/Linux)
-        if: "!contains(inputs.platform, 'windows')"
-        shell: bash
-        run: |
-          echo "Building llama-helper sidecar..."
-
-          # Determine llama-helper features based on platform
-          LLAMA_FEATURES=""
-          if [[ "${{ inputs.platform }}" == *"macos"* ]]; then
-            LLAMA_FEATURES="--features metal"
-            echo "Using Metal GPU acceleration for macOS"
-          elif [[ "${{ inputs.platform }}" == *"ubuntu"* ]]; then
-            LLAMA_FEATURES="--features vulkan"
-            echo "Using Vulkan GPU acceleration for Linux"
-          fi
-
-          # Build llama-helper from workspace root
-          # llama.cpp's bundled cpp-httplib does not compile against OpenSSL 4 (const X509_NAME); the helper never uses HTTPS, so build it without OpenSSL.
-          CMAKE_DISABLE_FIND_PACKAGE_OpenSSL=TRUE cargo build --release -p llama-helper $LLAMA_FEATURES
-
-          # Determine target triple and binary extension
-          TARGET="${{ inputs.target }}"
-          if [[ -z "$TARGET" ]]; then
-            TARGET=$(rustc -vV | grep "host:" | awk '{print $2}')
-          fi
-
-          # Copy binary to binaries directory
-          mkdir -p frontend/src-tauri/binaries
-          cp target/release/llama-helper frontend/src-tauri/binaries/llama-helper-${TARGET}
-
-          echo "Copied llama-helper to frontend/src-tauri/binaries/llama-helper-${TARGET}"
-          ls -la frontend/src-tauri/binaries/
 
       - name: Cache FFmpeg binary
         uses: actions/cache@v4

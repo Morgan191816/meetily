@@ -105,7 +105,6 @@
             "templates/*.json"
         ],
         "externalBin": [
-            "binaries/llama-helper",
             "binaries/ffmpeg"
         ],
         "linux": {
