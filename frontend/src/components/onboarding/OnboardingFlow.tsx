@@ -12,7 +12,8 @@ interface OnboardingFlowProps {
 
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { currentStep } = useOnboarding();
-  const [isMac, setIsMac] = React.useState(false);
+  // null until the platform check resolves, so step 3 never briefly falls back on macOS
+  const [isMac, setIsMac] = React.useState<boolean | null>(null);
 
   useEffect(() => {
     // Check if running on macOS
@@ -35,10 +36,14 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // Step 2: Setup Overview - Database initialization
   // Step 3: Permissions - Request mic + system audio (macOS only)
 
+  // A persisted step 3 on non-macOS (old install, or platform detected late) would
+  // render nothing, so fall back to the setup overview that finishes onboarding.
+  const showSetupOverview = currentStep === 2 || (currentStep === 3 && isMac === false);
+
   return (
     <div className="onboarding-flow">
       {currentStep === 1 && <WelcomeStep />}
-      {currentStep === 2 && <SetupOverviewStep />}
+      {showSetupOverview && <SetupOverviewStep />}
       {currentStep === 3 && isMac && <PermissionsStep />}
     </div>
   );

@@ -12,7 +12,7 @@ Morgan Meet 是一款本地优先的会议助手：在本机完成麦克风与�
 
 ## 从源码构建
 
-前置条件：pnpm 9.15.9、Node 20、Rust 1.99.1，以及各平台的原生构建依赖。首次构建前需完成 sidecar 准备，详见 [构建说明](docs/BUILDING.md)。
+前置条件：pnpm 9.15.9、Node 20、Rust 1.99.1，以及各平台的原生构建依赖。详细步骤见 [构建说明](docs/BUILDING.md)。
 
 ```bash
 cd frontend

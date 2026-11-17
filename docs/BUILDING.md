@@ -20,7 +20,7 @@ Frozen installation keeps the lockfile and installed dependency set aligned. Whe
 
 ## Development Commands and Debugging
 
-### First-run sidecar setup
+### First-run setup
 
 Run application commands from `frontend/` with dependencies installed:
 
@@ -52,7 +52,7 @@ Append `logs-dev/` for development builds or `logs/` for release builds. If the 
 
 Inspect the terminal's Rust logs and the desktop app's developer tools when diagnosing frontend/native interaction. For audio problems, inspect the pipeline and transcription-worker summaries for dropped samples, speech-segment statistics, queue depth, and failures. Use synthetic audio and redact sensitive data before sharing diagnostics.
 
-The `clean_run.sh` and Windows wrapper scripts are alternative launch paths, but inspect them before use: clean-run scripts can remove frontend dependencies and generated output. After sidecar preparation, prefer the commands above when you do not need a clean rebuild.
+The `clean_run.sh` and Windows wrapper scripts are alternative launch paths, but inspect them before use: clean-run scripts can remove frontend dependencies and generated output. After installing dependencies, prefer the commands above when you do not need a clean rebuild.
 
 
 <details>

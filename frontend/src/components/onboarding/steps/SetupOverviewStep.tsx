@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { OnboardingContainer } from '../OnboardingContainer';
 import { useOnboarding } from '@/contexts/OnboardingContext';
@@ -31,6 +32,7 @@ export function SetupOverviewStep() {
       window.location.reload();
     } catch (error) {
       console.error('Failed to complete onboarding:', error);
+      toast.error('Failed to finish setup. Please try again.');
       setIsFinishing(false);
     }
   };
@@ -38,7 +40,7 @@ export function SetupOverviewStep() {
   return (
     <OnboardingContainer
       title="Setup Overview"
-      description="Morgan Meet is preparing your meeting library. Transcription and summarization models can be configured later in Settings."
+      description="Morgan Meet is preparing your meeting library. Whisper models can be downloaded in Settings → Transcript; summary models can be configured there too."
       step={2}
       totalSteps={isMac ? 3 : 2}
     >

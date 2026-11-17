@@ -24,7 +24,7 @@ Use pnpm 9.15.9. Run these commands from `frontend/`:
 
 Use the Tauri app for development and validation; a standalone Next.js server does not exercise native commands, audio, or permissions.
 
-See [build and platform setup](docs/BUILDING.md), [development commands and debugging](docs/BUILDING.md#development-commands-and-debugging), and [GPU acceleration](docs/GPU_ACCELERATION.md) for prerequisites and platform-specific options. After sidecar preparation, prefer the package scripts over clean-run wrappers, which can remove dependencies and generated output.
+See [build and platform setup](docs/BUILDING.md), [development commands and debugging](docs/BUILDING.md#development-commands-and-debugging), and [GPU acceleration](docs/GPU_ACCELERATION.md) for prerequisites and platform-specific options. After installing dependencies, prefer the package scripts over clean-run wrappers, which can remove dependencies and generated output.
 
 ## Working in This Repository
 

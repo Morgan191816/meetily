@@ -473,7 +473,7 @@ export function useSummaryGeneration({
           endpoint: modelConfig.ollamaEndpoint || null,
         });
         if (models.length === 0) {
-          showPreflightError('No Ollama models found. Please download gemma3:1b from Model Settings.');
+          showPreflightError('No Ollama models found. Please download a summary model from Settings → Ai Summary.');
           return;
         }
       }
