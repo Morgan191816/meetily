@@ -25,10 +25,11 @@ pub struct SaveTranscriptConfigRequest {
 pub struct SettingsRepository;
 
 /// Map a stored provider/model to a supported one. Old installs may still have
-/// `parakeet` saved; that engine was removed, so fall back to local Whisper.
+/// `parakeet` or the legacy `whisper` value saved; those engines were removed or
+/// renamed, so fall back to local Whisper.
 fn normalize_transcript_provider(provider: &str, model: &str) -> crate::api::api::TranscriptConfig {
-    if provider == "parakeet" {
-        log::warn!("parakeet provider was removed; falling back to localWhisper");
+    if provider == "parakeet" || provider == "whisper" {
+        log::warn!("provider '{}' is not supported; falling back to localWhisper", provider);
         return crate::api::api::TranscriptConfig {
             provider: "localWhisper".to_string(),
             model: crate::config::DEFAULT_WHISPER_MODEL.to_string(),
@@ -385,6 +386,13 @@ mod tests {
     #[test]
     fn parakeet_provider_falls_back_to_whisper() {
         let cfg = normalize_transcript_provider("parakeet", "parakeet-tdt-0.6b-v3-int8");
+        assert_eq!(cfg.provider, "localWhisper");
+        assert_eq!(cfg.model, crate::config::DEFAULT_WHISPER_MODEL);
+    }
+
+    #[test]
+    fn legacy_whisper_provider_falls_back_to_local_whisper() {
+        let cfg = normalize_transcript_provider("whisper", "large-v3");
         assert_eq!(cfg.provider, "localWhisper");
         assert_eq!(cfg.model, crate::config::DEFAULT_WHISPER_MODEL);
     }

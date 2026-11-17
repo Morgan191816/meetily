@@ -1,6 +1,6 @@
 # System Architecture
 
-Meetily is a self-contained desktop application built with [Tauri](https://tauri.app/). It combines a Rust-based backend with a Next.js frontend into a single, efficient, and cross-platform application.
+Morgan Meet is a self-contained desktop application built with [Tauri](https://tauri.app/). It combines a Rust-based backend with a Next.js frontend into a single, efficient, and cross-platform application.
 
 ## High-Level Architecture Diagram
 
@@ -42,7 +42,7 @@ graph TD
 
 ## Frontend and Native Communication
 
-The supported application uses Tauri commands and events, not a separate FastAPI service. The Python/FastAPI, Docker, and standalone whisper-server code under `backend/` is an unsupported legacy archive.
+The application uses Tauri commands and events, not a separate FastAPI service.
 
 - Frontend code calls Rust commands with `invoke` from `@tauri-apps/api/core`. Command registration lives in [lib.rs](../frontend/src-tauri/src/lib.rs); implementations delegate to the relevant Rust service.
 - Rust emits events through Tauri, and frontend listeners update React state. Check the current command arguments and event payloads before changing either side of the interface.

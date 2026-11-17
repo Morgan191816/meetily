@@ -190,11 +190,12 @@ pub async fn initialize_fresh_database(app: AppHandle) -> Result<(), String> {
     // Set default model configuration for fresh installs
     let pool = db_manager.pool();
 
-    // Default Summary Model: Ollama (HTTP provider, no API key needed)
+    // Default Summary Model: Ollama (HTTP provider, no API key needed).
+    // Keep in sync with the model the UI recommends and downloads (gemma3:1b).
     if let Err(e) = crate::database::repositories::setting::SettingsRepository::save_model_config(
         pool,
         "ollama",
-        "llama3.2:latest",
+        "gemma3:1b",
         "large-v3", // Default whisper model (required by the settings row)
         None,
     ).await {

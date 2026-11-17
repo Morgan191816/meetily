@@ -24,6 +24,7 @@ pub fn set_bundled_templates_dir(path: PathBuf) {
 /// - Linux: ~/.config/Meetily/templates/
 fn get_custom_templates_dir() -> Option<PathBuf> {
     let mut path = dirs::data_dir()?;
+    // Kept as-is to avoid orphaning existing model/template data; rename in a migration.
     path.push("Meetily");
     path.push("templates");
     Some(path)

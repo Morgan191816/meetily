@@ -1,4 +1,4 @@
-# Building Meetily from Source
+# Building Morgan Meet from Source
 
 This guide explains source builds on each supported platform. Start with the build notes below, then use the platform instructions that match your machine.
 
@@ -14,7 +14,7 @@ pnpm install --frozen-lockfile
 
 Frozen installation keeps the lockfile and installed dependency set aligned. When intentionally changing dependencies, update and commit `pnpm-lock.yaml`.
 
-- **Linux:** Meetily is built from source; choose acceleration for the environment where you build.
+- **Linux:** Morgan Meet is built from source; choose acceleration for the environment where you build.
 - **Windows packages:** Distribution builds use Vulkan-enabled Whisper and require an AVX2-capable x64 CPU. AVX-512 is not required.
 - **CUDA:** NVIDIA CUDA support requires a compatible source build and CUDA toolchain; the standard Windows installer does not select it automatically.
 
@@ -42,13 +42,13 @@ Release builds normally log `app_lib` at Info level under `logs/`. To enable Deb
 
 | Platform | App data directory |
 | --- | --- |
-| Linux | `${XDG_DATA_HOME:-$HOME/.local/share}/com.meetily.ai` |
-| macOS | `~/Library/Application Support/com.meetily.ai` |
-| Windows | `%APPDATA%\com.meetily.ai` |
+| Linux | `${XDG_DATA_HOME:-$HOME/.local/share}/com.morgan.meet` |
+| macOS | `~/Library/Application Support/com.morgan.meet` |
+| Windows | `%APPDATA%\com.morgan.meet` |
 
 Append `logs-dev/` for development builds or `logs/` for release builds. If the persistent log path is unavailable or unwritable, logging may fall back to a stream, so log files are not guaranteed.
 
-`RUST_LOG` does not control Meetily's configured application logger; build tools or dependencies may handle it separately.
+`RUST_LOG` does not control Morgan Meet's configured application logger; build tools or dependencies may handle it separately.
 
 Inspect the terminal's Rust logs and the desktop app's developer tools when diagnosing frontend/native interaction. For audio problems, inspect the pipeline and transcription-worker summaries for dropped samples, speech-segment statistics, queue depth, and failures. Use synthetic audio and redact sensitive data before sharing diagnostics.
 
@@ -60,7 +60,7 @@ The `clean_run.sh` and Windows wrapper scripts are alternative launch paths, but
 
 ## 🐧 Building on Linux
 
-This guide helps you build Meetily on Linux with **automatic GPU acceleration**. The build system detects your hardware and configures the best performance automatically.
+This guide helps you build Morgan Meet on Linux with **automatic GPU acceleration**. The build system detects your hardware and configures the best performance automatically.
 
 ---
 
@@ -278,7 +278,7 @@ TAURI_GPU_FEATURE=openblas ./build-gpu.sh
 After successful build:
 
 ```
-src-tauri/target/release/bundle/appimage/Meetily_<version>_amd64.AppImage
+src-tauri/target/release/bundle/appimage/Morgan Meet_<version>_amd64.AppImage
 ```
 
 ---

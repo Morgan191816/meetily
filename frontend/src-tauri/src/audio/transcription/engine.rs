@@ -162,7 +162,8 @@ pub async fn get_or_init_transcription_engine<R: Runtime>(
             Ok(TranscriptionEngine::Whisper(whisper_engine))
         }
         other => {
-            warn!("Provider '{}' was normalized or is unsupported; falling back to localWhisper", other);
+            // Only legacy values ("parakeet"/"whisper") should reach here after normalization.
+            warn!("Provider '{}' is not supported; falling back to localWhisper", other);
             let whisper_engine = get_or_init_whisper(app).await?;
             Ok(TranscriptionEngine::Whisper(whisper_engine))
         }

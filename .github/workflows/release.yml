@@ -50,7 +50,7 @@ jobs:
               repo: context.repo.repo,
               tag_name: `v${{ steps.get-version.outputs.version }}`,
               target_commitish: context.sha,
-              name: `Meetily v${{ steps.get-version.outputs.version }}`,
+              name: `Morgan Meet v${{ steps.get-version.outputs.version }}`,
               draft: true,
               prerelease: false,
               generate_release_notes: true
@@ -131,9 +131,9 @@ jobs:
           echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.create-release.outputs.version }}"
           echo ""
           echo "Uploaded assets (via tauri-action):"
-          echo "  - macOS: DMG installer + app.tar.gz + .sig"
-          echo "  - Windows: MSI + NSIS installers (SIGNED via signCommand) + .sig files"
-          echo "  - Linux: DEB and AppImage packages + .sig files"
+          echo "  - macOS: DMG installer + app.tar.gz"
+          echo "  - Windows: MSI + NSIS installers (SIGNED via signCommand)"
+          echo "  - Linux: DEB and AppImage packages"
           echo ""
           echo "Next steps:"
           echo "  1. Review the draft release"
@@ -152,9 +152,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Platform | Assets |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **macOS** | DMG installer, app.tar.gz, .sig |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Windows** | MSI installer (SIGNED), NSIS installer (SIGNED), .sig files |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Linux** | DEB, AppImage and signatures |" >> $GITHUB_STEP_SUMMARY
+          echo "| **macOS** | DMG installer, app.tar.gz |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Windows** | MSI installer (SIGNED), NSIS installer (SIGNED) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Linux** | DEB, AppImage |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
