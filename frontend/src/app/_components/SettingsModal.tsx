@@ -309,7 +309,7 @@ export function SettingsModals({
               onClick={() => onClose('errorAlert')}
               className="ml-2 text-red-600 hover:text-red-800 underline"
             >
-              Dismiss
+              关闭
             </button>
           </AlertDescription>
         </Alert>
@@ -327,7 +327,7 @@ export function SettingsModals({
               onClick={() => onClose('chunkDropWarning')}
               className="ml-2 text-yellow-600 hover:text-yellow-800 underline"
             >
-              Dismiss
+              关闭
             </button>
           </AlertDescription>
         </Alert>
