@@ -283,7 +283,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
             start: processId,
             end: null,
             data: null,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: error instanceof Error ? error.message : '未知错误',
           });
         } catch (callbackError) {
           console.error('Failed to handle summary polling error:', callbackError);

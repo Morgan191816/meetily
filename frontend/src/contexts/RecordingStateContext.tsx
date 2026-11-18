@@ -159,7 +159,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
           console.log('[RecordingStateContext] Recording starting event');
           setState(prev => prev.status === RecordingStatus.RECORDING
             ? prev
-            : { ...prev, status: RecordingStatus.STARTING, statusMessage: 'Starting recording...' });
+            : { ...prev, status: RecordingStatus.STARTING, statusMessage: '正在开始录音…' });
         });
         unsubscribers.push(unlistenStarting);
 
@@ -167,7 +167,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
           if (payload.stage !== 'stopping_audio') return;
           setState(prev => (prev.status === RecordingStatus.RECORDING ||
             (prev.status === RecordingStatus.IDLE && prev.isRecording))
-            ? { ...prev, status: RecordingStatus.STOPPING, statusMessage: 'Stopping recording...' }
+            ? { ...prev, status: RecordingStatus.STOPPING, statusMessage: '正在停止录音…' }
             : prev);
         });
         unsubscribers.push(unlistenShutdown);
@@ -189,7 +189,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
             return {
               ...prev,
               status: newStatus,
-              statusMessage: newStatus === RecordingStatus.STOPPING ? 'Stopping recording...' : prev.statusMessage,
+              statusMessage: newStatus === RecordingStatus.STOPPING ? '正在停止录音…' : prev.statusMessage,
               isRecording: false,
               isPaused: false,
               isActive: false,
@@ -288,7 +288,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
           // selected mic that wasn't available at start (backend fell back to
           // the default). Copy is worded to be accurate for both.
           toast.info(
-            `已切换麦克风为 ${label}，本次会议使用该设备。`,
+            `麦克风已切换为 ${label}，本次会议将使用该设备。`,
             { duration: 6000 }
           );
         });

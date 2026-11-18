@@ -113,7 +113,7 @@ export function useTranscriptRecovery(): UseTranscriptRecoveryReturn {
       // 1. Load meeting metadata
       const metadata = await indexedDBService.getMeetingMetadata(meetingId);
       if (!metadata) {
-        throw new Error('未找到会议元数据');
+        throw new Error('未找到会议信息');
       }
 
       // 2. Load all transcripts

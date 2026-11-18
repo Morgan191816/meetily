@@ -27,7 +27,7 @@ export function About() {
                 <h1 className="text-xl font-bold text-gray-900">Morgan Meet</h1>
                 <span className="text-sm text-gray-500"> v{currentVersion}</span>
                 <p className="text-medium text-gray-600 mt-1">
-                    本地会议转录与纪要工具
+                    本地会议转写与纪要工具
                 </p>
             </div>
 

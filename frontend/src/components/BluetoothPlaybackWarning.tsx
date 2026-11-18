@@ -76,7 +76,7 @@ export function BluetoothPlaybackWarning({
           </AlertTitle>
           <AlertDescription className="text-yellow-800 mt-1">
             当前正在通过 <strong>{deviceName}</strong> 播放。
-            通过蓝牙设备播放时，录音可能听起来失真或速度偏快。
+            使用蓝牙设备时，录到的声音可能失真或偏快。
             为了准确回听，请使用<strong>电脑扬声器</strong>或<strong>有线耳机</strong>。
             <br />
             <a
