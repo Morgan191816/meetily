@@ -32,15 +32,15 @@ export function SetupOverviewStep() {
       window.location.reload();
     } catch (error) {
       console.error('Failed to complete onboarding:', error);
-      toast.error('Failed to finish setup. Please try again.');
+      toast.error('完成初始化失败，请重试。');
       setIsFinishing(false);
     }
   };
 
   return (
     <OnboardingContainer
-      title="Setup Overview"
-      description="Morgan Meet is preparing your meeting library. Whisper models can be downloaded in Settings → Transcript; summary models can be configured there too."
+      title="初始化概览"
+      description="Morgan Meet 正在准备你的会议库。Whisper 模型可在「设置 → 转写」中下载，纪要模型也在那里配置。"
       step={2}
       totalSteps={isMac ? 3 : 2}
     >
@@ -52,7 +52,7 @@ export function SetupOverviewStep() {
             disabled={isFinishing}
             className="w-full h-11 bg-gray-900 hover:bg-gray-800 text-white"
           >
-            Let's Go
+            开始使用
           </Button>
         </div>
       </div>

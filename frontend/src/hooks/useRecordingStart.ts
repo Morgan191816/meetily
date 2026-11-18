@@ -15,7 +15,7 @@ import {
 import { toast } from 'sonner';
 
 const TRANSCRIPTION_RUNTIME_START_ERROR_CODE = 'TRANSCRIPTION_RUNTIME_INITIALIZATION_FAILED';
-const TRANSCRIPTION_RUNTIME_USER_MESSAGE = 'Speech recognition could not initialize. Restart Morgan Meet. If the problem continues, repair or reinstall the app.';
+const TRANSCRIPTION_RUNTIME_USER_MESSAGE = '语音识别初始化失败，请重启 Morgan Meet。若问题仍然存在，请修复或重新安装应用。';
 
 const isTranscriptionRuntimeStartError = (error: unknown) =>
   String(error) === TRANSCRIPTION_RUNTIME_START_ERROR_CODE;
@@ -130,17 +130,17 @@ export function useRecordingStart(
       if (!modelReady) {
         const isDownloading = await checkIfModelDownloading();
         if (isDownloading) {
-          toast.info('Model download in progress', {
-            description: 'Please wait for the transcription model to finish downloading before recording.',
+          toast.info('模型正在下载', {
+            description: '请等待转写模型下载完成后再开始录音。',
             duration: 5000,
           });
           Analytics.trackButtonClick('start_recording_blocked_downloading', 'home_page');
         } else {
-          toast.error('Transcription model not ready', {
-            description: 'Please download a transcription model before recording.',
+          toast.error('转写模型尚未就绪', {
+            description: '请先下载转写模型再开始录音。',
             duration: 5000,
           });
-          showModal?.('modelSelector', 'Transcription model setup required');
+          showModal?.('modelSelector', '需要先设置转写模型');
           Analytics.trackButtonClick('start_recording_blocked_missing', 'home_page');
         }
         setStatus(RecordingStatus.IDLE);
@@ -191,7 +191,7 @@ export function useRecordingStart(
 
       const isRuntimeError = isTranscriptionRuntimeStartError(error);
       if (errorMsg.includes('Recording start timed out')) {
-        toast.error('Recording start timed out — please try again');
+        toast.error('录音启动超时，请重试');
       }
 
       setStatus(RecordingStatus.ERROR, isRuntimeError
@@ -222,17 +222,17 @@ export function useRecordingStart(
           if (!modelReady) {
             const isDownloading = await checkIfModelDownloading();
             if (isDownloading) {
-              toast.info('Model download in progress', {
-                description: 'Please wait for the transcription model to finish downloading before recording.',
+              toast.info('模型正在下载', {
+                description: '请等待转写模型下载完成后再开始录音。',
                 duration: 5000,
               });
               Analytics.trackButtonClick('start_recording_blocked_downloading', 'sidebar_auto');
             } else {
-              toast.error('Transcription model not ready', {
-                description: 'Please download a transcription model before recording.',
+              toast.error('转写模型尚未就绪', {
+                description: '请先下载转写模型再开始录音。',
                 duration: 5000,
               });
-              showModal?.('modelSelector', 'Transcription model setup required');
+              showModal?.('modelSelector', '需要先设置转写模型');
               Analytics.trackButtonClick('start_recording_blocked_missing', 'sidebar_auto');
             }
             setStatus(RecordingStatus.IDLE);
@@ -278,7 +278,7 @@ export function useRecordingStart(
                 ? TRANSCRIPTION_RUNTIME_USER_MESSAGE
                 : errorMsg);
               if (!isRuntimeError) {
-                alert(`Failed to start recording.\n\n${errorMsg}`);
+                alert(`启动录音失败。\n\n${errorMsg}`);
               }
             }
             Analytics.trackButtonClick('start_recording_error', 'sidebar_auto');
@@ -321,17 +321,17 @@ export function useRecordingStart(
       if (!modelReady) {
         const isDownloading = await checkIfModelDownloading();
         if (isDownloading) {
-          toast.info('Model download in progress', {
-            description: 'Please wait for the transcription model to finish downloading before recording.',
+          toast.info('模型正在下载', {
+            description: '请等待转写模型下载完成后再开始录音。',
             duration: 5000,
           });
           Analytics.trackButtonClick('start_recording_blocked_downloading', 'sidebar_direct');
         } else {
-          toast.error('Transcription model not ready', {
-            description: 'Please download a transcription model before recording.',
+          toast.error('转写模型尚未就绪', {
+            description: '请先下载转写模型再开始录音。',
             duration: 5000,
           });
-          showModal?.('modelSelector', 'Transcription model setup required');
+          showModal?.('modelSelector', '需要先设置转写模型');
           Analytics.trackButtonClick('start_recording_blocked_missing', 'sidebar_direct');
         }
         setStatus(RecordingStatus.IDLE);
@@ -376,7 +376,7 @@ export function useRecordingStart(
             ? TRANSCRIPTION_RUNTIME_USER_MESSAGE
             : errorMsg);
           if (!isRuntimeError) {
-            alert(`Failed to start recording.\n\n${errorMsg}`);
+            alert(`启动录音失败。\n\n${errorMsg}`);
           }
         }
         Analytics.trackButtonClick('start_recording_error', 'sidebar_direct');
