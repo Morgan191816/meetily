@@ -816,7 +816,7 @@ const Sidebar: React.FC = () => {
       {/* Confirmation Modal for Delete */}
       <ConfirmationModal
         isOpen={deleteModalState.isOpen}
-        text="确定删除这个会议吗？此操作不可撤销。"
+        text="确定要删除这个会议吗？此操作无法撤销。"
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteModalState({ isOpen: false, itemId: null })}
       />

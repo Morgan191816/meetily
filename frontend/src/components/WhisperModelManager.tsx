@@ -444,11 +444,11 @@ export function ModelManager({
 
   const getDisplayName = (modelName: string): string => {
     const modelNameMapping: { [key: string]: string } = {
-      "small": "Small",
-      "medium-q5_0": "Medium",
-      "large-v3-q5_0": "Large V3 Compressed",
-      "large-v3-turbo": "Large V3 Turbo",
-      "large-v3": "Large V3"
+      "small": "小型",
+      "medium-q5_0": "中型",
+      "large-v3-q5_0": "大型 V3 压缩版",
+      "large-v3-turbo": "大型 V3 极速版",
+      "large-v3": "大型 V3"
     };
 
     const basicModelNames = ["small", "medium-q5_0", "large-v3-q5_0", "large-v3-turbo", "large-v3"];

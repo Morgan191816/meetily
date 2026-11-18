@@ -473,7 +473,7 @@ export function useSummaryGeneration({
           endpoint: modelConfig.ollamaEndpoint || null,
         });
         if (models.length === 0) {
-          showPreflightError('未找到 Ollama 模型。请在「设置 → AI 纪要」中下载纪要模型。');
+          showPreflightError('未找到 Ollama 模型。请在「设置 → 纪要」中下载纪要模型。');
           return;
         }
       }

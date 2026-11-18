@@ -74,7 +74,7 @@ export function LanguagePickerPopover({
     [recents, filter],
   );
 
-  const showAuto = mode === "meeting" && (!filter || "auto".includes(filter));
+  const showAuto = mode === "meeting" && (!filter || "auto".includes(filter) || "自动检测".includes(filter));
   const showRecents = mode === "meeting" && recentsResolved.length > 0;
   const hasNoResults =
     filteredAll.length === 0 && recentsResolved.length === 0 && !showAuto;
@@ -135,7 +135,7 @@ export function LanguagePickerPopover({
             }`}
           >
             <span className="flex flex-col">
-              <span>自动</span>
+              <span>自动检测</span>
               {autoSubtitle && (
                 <span className="text-xs font-normal text-gray-400">{autoSubtitle}</span>
               )}
