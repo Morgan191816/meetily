@@ -61,7 +61,7 @@ export function PermissionWarning({
             <div className="flex items-center gap-2">
               {!hasMicrophone && <Mic className="h-4 w-4" />}
               {!hasSystemAudio && <Speaker className="h-4 w-4" />}
-              {!hasMicrophone && !hasSystemAudio ? '需要权限' : !hasMicrophone ? '需要麦克风权限' : '需要系统音频权限'}
+              {!hasMicrophone && !hasSystemAudio ? '需要权限' : !hasMicrophone ? '需要麦克风权限' : '需要系统声音权限'}
             </div>
           </AlertTitle>
           {/* Action Buttons */}
@@ -116,12 +116,12 @@ export function PermissionWarning({
               <>
                 <p className="mb-3">
                   {hasMicrophone
-                    ? '系统音频捕获不可用。你仍可使用麦克风录音，但电脑声音不会被采集。'
-                    : '系统音频捕获同样不可用。'}
+                    ? '系统声音捕获不可用。你仍可使用麦克风录音，但电脑声音不会被采集。'
+                    : '系统声音捕获同样不可用。'}
                 </p>
                 {isMacOS && (
                   <div className="space-y-2 text-sm mb-4">
-                    <p className="font-medium">在 macOS 上启用系统音频：</p>
+                    <p className="font-medium">在 macOS 上启用系统声音：</p>
                     <ul className="list-disc list-inside ml-2 space-y-1">
                       <li>安装虚拟音频设备（例如 BlackHole 2ch）</li>
                       <li>为 Morgan Meet 授予屏幕录制权限</li>

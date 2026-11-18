@@ -64,7 +64,7 @@ export function PermissionsStep() {
       try {
         await invoke('open_system_settings');
       } catch {
-        alert('请在「系统设置 → 隐私与安全性 → 音频捕获」中允许音频捕获');
+        alert('请在「系统设置 → 隐私与安全性 → 屏幕与系统音频录制」中允许 Morgan Meet 录制系统声音');
       }
       return;
     }
@@ -114,7 +114,7 @@ export function PermissionsStep() {
   return (
     <OnboardingContainer
       title="授予权限"
-      description="Morgan Meet 需要访问麦克风和系统音频才能录制会议"
+      description="Morgan Meet 需要访问麦克风和系统声音才能录制会议"
       step={3}
       hideProgress={true}
       showNavigation={allPermissionsGranted}
@@ -136,7 +136,7 @@ export function PermissionsStep() {
           {/* System Audio */}
           <PermissionRow
             icon={<Volume2 className="w-5 h-5" />}
-            title="系统音频"
+            title="系统声音"
             description="点击「启用」授予音频捕获权限"
             status={permissions.systemAudio}
             isPending={isPending}
