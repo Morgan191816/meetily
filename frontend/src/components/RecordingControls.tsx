@@ -431,7 +431,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                           >
                             {isPaused ? <Play size={16} /> : <Pause size={16} />}
                             {(isPausing || isResuming) && (
-                              <div className="absolute -top-8 text-gray-600 font-medium text-xs">
+                              <div className="absolute -top-8 text-gray-600 font-medium text-xs whitespace-nowrap">
                                 {isPausing ? '暂停中…' : '继续中…'}
                               </div>
                             )}
@@ -455,7 +455,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                           >
                             <Square size={16} />
                             {isStopping && (
-                              <div className="absolute -top-8 text-gray-600 font-medium text-xs">
+                              <div className="absolute -top-8 text-gray-600 font-medium text-xs whitespace-nowrap">
                                 停止中…
                               </div>
                             )}

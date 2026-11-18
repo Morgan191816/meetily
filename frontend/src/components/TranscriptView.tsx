@@ -284,7 +284,7 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({ transcripts, isR
             <div className="flex items-start gap-2">
               <Tooltip>
                 <TooltipTrigger>
-                  <span className="text-xs text-gray-400 mt-1 flex-shrink-0 min-w-[50px]">
+                  <span className="text-xs text-gray-400 mt-1 flex-shrink-0 min-w-[56px] tabular-nums">
                     {transcript.audio_start_time !== undefined
                       ? formatRecordingTime(transcript.audio_start_time)
                       : transcript.timestamp}
@@ -309,10 +309,10 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({ transcripts, isR
                   // Streaming transcript - show in bubble (full width)
                   <div className="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
                     <div className="relative">
-                      <p className="text-base text-gray-800 leading-relaxed" style={{ visibility: 'hidden' }}>
+                      <p className="text-base text-gray-800 leading-relaxed break-words" style={{ visibility: 'hidden' }}>
                         {sizerText}
                       </p>
-                      <p className="text-base text-gray-800 leading-relaxed absolute top-0 left-0">
+                      <p className="text-base text-gray-800 leading-relaxed break-words absolute top-0 left-0">
                         {displayText}
                       </p>
                     </div>
@@ -320,10 +320,10 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({ transcripts, isR
                 ) : (
                   // Regular transcript - simple text
                   <div className="relative">
-                    <p className="text-base text-gray-800 leading-relaxed" style={{ visibility: 'hidden' }}>
+                    <p className="text-base text-gray-800 leading-relaxed break-words" style={{ visibility: 'hidden' }}>
                       {sizerText}
                     </p>
-                    <p className="text-base text-gray-800 leading-relaxed absolute top-0 left-0">
+                    <p className="text-base text-gray-800 leading-relaxed break-words absolute top-0 left-0">
                       {displayText}
                     </p>
                   </div>
