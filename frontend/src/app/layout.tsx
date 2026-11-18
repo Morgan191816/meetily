@@ -124,8 +124,8 @@ export default function RootLayout({
     const betaFeatures = loadBetaFeatures();
 
     if (!betaFeatures.importAndRetranscribe) {
-      toast.error('Beta feature disabled', {
-        description: 'Enable "Import Audio & Retranscribe" in Settings > Beta to use this feature.'
+      toast.error('实验功能未开启', {
+        description: '请在 设置 > 实验功能 中开启“导入音频并重新转写”后使用此功能。'
       });
       return;
     }

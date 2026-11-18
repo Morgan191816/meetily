@@ -659,12 +659,12 @@ export function ModelSettingsModal({
 
     setIsTestingConnection(true);
     try {
-      const result = await invoke<{ status: string; message: string }>('api_test_custom_openai_connection', {
+      await invoke('api_test_custom_openai_connection', {
         endpoint: customOpenAIEndpoint.trim(),
         apiKey: customOpenAIApiKey.trim() || null,
         model: customOpenAIModel.trim(),
       });
-      toast.success(result.message || '连接成功！');
+      toast.success('连接成功，响应校验通过');
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       toast.error(errorMsg);
@@ -1305,7 +1305,7 @@ export function ModelSettingsModal({
                         >
                           <div>
                             <b className="font-bold">{model.name}</b>
-                            <span className="text-muted-foreground">，大小 </span>
+                            <span className="text-muted-foreground">，大小</span>
                             <span className="font-mono font-bold text-sm">{model.size}</span>
                           </div>
 

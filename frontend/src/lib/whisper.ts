@@ -179,15 +179,15 @@ export function getModelPerformanceBadge(modelName: string): { label: string; co
   const type = getModelType(modelName);
   switch (type) {
     case 'f16':
-      return { label: 'Full Precision', color: 'blue' };
+      return { label: '全精度', color: 'blue' };
     case 'q5_1':
-      return { label: 'Balanced+', color: 'green' };
+      return { label: '均衡+', color: 'green' };
     case 'q5_0':
-      return { label: 'Balanced', color: 'green' };
+      return { label: '均衡', color: 'green' };
     case 'q4_0':
-      return { label: 'Fast', color: 'orange' };
+      return { label: '快速', color: 'orange' };
     default:
-      return { label: 'Standard', color: 'gray' };
+      return { label: '标准', color: 'gray' };
   }
 }
 
@@ -200,42 +200,42 @@ export function getModelTagline(modelName: string, speed: ProcessingSpeed, accur
   let speedText = '';
   switch (speed) {
     case 'Very Fast':
-      speedText = 'Real time';
+      speedText = '实时';
       break;
     case 'Fast':
-      speedText = 'Fast processing';
+      speedText = '快速处理';
       break;
     case 'Medium':
-      speedText = 'Moderate speed';
+      speedText = '中等速度';
       break;
     case 'Slow':
-      speedText = 'Slower processing';
+      speedText = '较慢';
       break;
   }
 
   // Key feature based on model and accuracy
   let featureText = '';
   if (baseName === 'large-v3') {
-    featureText = 'Most accurate';
+    featureText = '最准确';
   } else if (baseName === 'large-v3-turbo') {
-    featureText = 'Best accuracy with speed';
+    featureText = '速度与准确率兼顾';
   } else if (baseName === 'medium') {
-    featureText = accuracy === 'High' ? 'Professional quality' : 'Balanced quality';
+    featureText = accuracy === 'High' ? '专业质量' : '均衡质量';
   } else if (baseName === 'small') {
-    featureText = 'Good accuracy';
+    featureText = '准确率良好';
   } else if (baseName === 'base') {
-    featureText = 'Balanced quality';
+    featureText = '均衡质量';
   } else if (baseName === 'tiny') {
-    featureText = 'Fastest option';
+    featureText = '最快';
   }
 
   // Add quantization note if applicable
   if (isQuantized) {
     const quantType = getModelType(modelName);
     if (quantType === 'q5_0') {
-      featureText += ', optimized';
+      featureText += '，优化';
     } else if (quantType === 'q4_0') {
-      featureText += ', ultra fast';
+      featureText += '，极速';
     }
   }
 
