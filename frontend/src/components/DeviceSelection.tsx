@@ -62,7 +62,7 @@ export function DeviceSelection({ selectedDevices, onDeviceChange, disabled = fa
       console.log('Fetched audio devices:', result);
     } catch (err) {
       console.error('Failed to fetch audio devices:', err);
-      setError('音频设备加载失败。请检查系统音频设置。');
+      setError('音频设备加载失败。请检查系统声音设置。');
     } finally {
       setLoading(false);
       setRefreshing(false);

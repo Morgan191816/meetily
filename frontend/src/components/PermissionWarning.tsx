@@ -81,7 +81,7 @@ export function PermissionWarning({
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
               >
                 <Speaker className="h-4 w-4" />
-                打开屏幕录制设置
+                打开屏幕与系统音频录制设置
               </button>
             )}
             <button
@@ -124,7 +124,7 @@ export function PermissionWarning({
                     <p className="font-medium">在 macOS 上启用系统声音：</p>
                     <ul className="list-disc list-inside ml-2 space-y-1">
                       <li>安装虚拟音频设备（例如 BlackHole 2ch）</li>
-                      <li>为 Morgan Meet 授予屏幕录制权限</li>
+                      <li>为 Morgan Meet 授予屏幕与系统音频录制权限</li>
                       <li>在「音频 MIDI 设置」中配置音频路由</li>
                     </ul>
                   </div>

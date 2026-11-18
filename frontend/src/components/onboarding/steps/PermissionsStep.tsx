@@ -137,7 +137,7 @@ export function PermissionsStep() {
           <PermissionRow
             icon={<Volume2 className="w-5 h-5" />}
             title="系统声音"
-            description="点击「启用」授予音频捕获权限"
+            description="点击「启用」授予系统声音权限"
             status={permissions.systemAudio}
             isPending={isPending}
             onAction={handleSystemAudioAction}

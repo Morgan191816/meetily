@@ -128,12 +128,12 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
       } else if (errorMsg.includes('system audio') || errorMsg.includes('speaker') || errorMsg.includes('output')) {
         setDeviceError({
           title: '系统声音不可用',
-          message: '无法采集系统声音。请检查：\n• 已安装虚拟音频设备（如 BlackHole）\n• 应用已获得屏幕录制权限（macOS）\n• 系统声音已正确配置'
+          message: '无法采集系统声音。请检查：\n• 已安装虚拟音频设备（如 BlackHole）\n• 应用已获得屏幕与系统音频录制权限（macOS）\n• 系统声音已正确配置'
         });
       } else if (errorMsg.includes('permission')) {
         setDeviceError({
           title: '需要权限',
-          message: '录音需要相应权限。请：\n• 在系统设置中授予麦克风访问权限\n• 为系统声音授予屏幕录制权限（macOS）\n• 授予权限后重启应用'
+          message: '录音需要相应权限。请：\n• 在系统设置中授予麦克风访问权限\n• 在系统设置中授予屏幕与系统音频录制权限（macOS）\n• 授予权限后重启应用'
         });
       } else {
         setDeviceError({

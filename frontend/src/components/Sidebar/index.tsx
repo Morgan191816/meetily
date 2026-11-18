@@ -350,7 +350,7 @@ const Sidebar: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to delete meeting:', error);
-      toast.error("Failed to delete meeting", {
+      toast.error("删除会议失败", {
         description: error instanceof Error ? error.message : String(error)
       });
     }
@@ -381,7 +381,7 @@ const Sidebar: React.FC = () => {
 
     // Prevent empty titles
     if (!newTitle) {
-      toast.error("Meeting title cannot be empty");
+      toast.error("会议标题不能为空");
       return;
     }
 
@@ -412,7 +412,7 @@ const Sidebar: React.FC = () => {
       setEditingTitle('');
     } catch (error) {
       console.error('Failed to update meeting title:', error);
-      toast.error("Failed to update meeting title", {
+      toast.error("更新会议标题失败", {
         description: error instanceof Error ? error.message : String(error)
       });
     }

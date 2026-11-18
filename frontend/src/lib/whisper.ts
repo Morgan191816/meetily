@@ -54,37 +54,37 @@ export interface TranscribeAudioRequest {
 export const MODEL_CONFIGS: Record<string, Partial<ModelInfo>> = {
   // Standard f16 models (full precision)
   'large-v3': {
-    description: 'Highest accuracy, best for important meetings. Slower processing.',
+    description: '准确度最高，适合重要会议，处理速度较慢。',
     size_mb: 2951,
     accuracy: 'High',
     speed: 'Slow'
   },
   'large-v3-turbo': {
-    description: 'Best accuracy with improved speed.',
+    description: '准确度最佳，速度更快。',
     size_mb: 1549,
     accuracy: 'High',
     speed: 'Medium'
   },
   'medium': {
-    description: 'Balanced accuracy and speed. Good for most use cases.',
+    description: '准确度与速度均衡，适合大多数场景。',
     size_mb: 1463,
     accuracy: 'High',
     speed: 'Slow'
   },
   'small': {
-    description: 'Fast processing with good quality. Great for quick transcription.',
+    description: '处理速度快、质量好，适合快速转写。',
     size_mb: 466,
     accuracy: 'Good',
     speed: 'Medium'
   },
   'base': {
-    description: 'Good balance of speed and accuracy.',
+    description: '速度与准确度平衡良好。',
     size_mb: 142,
     accuracy: 'Good',
     speed: 'Fast'
   },
   'tiny': {
-    description: 'Fastest processing, good for real-time use.',
+    description: '处理速度最快，适合实时使用。',
     size_mb: 39,
     accuracy: 'Decent',
     speed: 'Very Fast'
@@ -92,19 +92,19 @@ export const MODEL_CONFIGS: Record<string, Partial<ModelInfo>> = {
 
   // Q5_1 quantized models (balanced speed/accuracy, slightly better quality than Q5_0)
   'tiny-q5_1': {
-    description: 'Quantized tiny model, ~50% faster processing.',
+    description: '量化 tiny 模型，处理速度快约 50%。',
     size_mb: 31,
     accuracy: 'Decent',
     speed: 'Very Fast'
   },
   'base-q5_1': {
-    description: 'Quantized base model, good speed/accuracy balance.',
+    description: '量化 base 模型，速度与准确度平衡良好。',
     size_mb: 57,
     accuracy: 'Good',
     speed: 'Fast'
   },
   'small-q5_1': {
-    description: 'Quantized small model, faster than f16 version.',
+    description: '量化 small 模型，比 f16 版本更快。',
     size_mb: 181,
     accuracy: 'Good',
     speed: 'Fast'
@@ -112,19 +112,19 @@ export const MODEL_CONFIGS: Record<string, Partial<ModelInfo>> = {
 
   // Q5_0 quantized models (balanced speed/accuracy)
   'medium-q5_0': {
-    description: 'Quantized medium model, professional quality with better speed.',
+    description: '量化 medium 模型，专业级质量，速度更快。',
     size_mb: 514,
     accuracy: 'High',
     speed: 'Medium'
   },
   'large-v3-turbo-q5_0': {
-    description: 'Quantized large turbo model, best balance.',
+    description: '量化 large turbo 模型，综合平衡最佳。',
     size_mb: 547,
     accuracy: 'High',
     speed: 'Medium'
   },
   'large-v3-q5_0': {
-    description: 'Quantized large model, best balance of speed and accuracy.',
+    description: '量化 large 模型，速度与准确度平衡最佳。',
     size_mb: 1031,
     accuracy: 'High',
     speed: 'Slow'
