@@ -5,6 +5,11 @@ const INTERVAL_MS = 15; // Character reveal interval
 const DURATION_MS = 800; // Total streaming duration
 const INITIAL_CHARS = 5; // Show first N characters immediately
 
+// CJK characters carry more meaning per glyph, so reveal them faster
+export function charsPerTick(text: string): number {
+  return /[一-鿿]/.test(text) ? 2 : 1;
+}
+
 interface StreamingSegment {
   id: string;
   fullText: string;
@@ -67,12 +72,12 @@ export function useTranscriptStreaming(
       // Calculate how many characters to reveal per tick
       const totalTicks = Math.floor(DURATION_MS / INTERVAL_MS);
       const remainingChars = fullText.length - INITIAL_CHARS;
-      const charsPerTick = Math.max(2, Math.ceil(remainingChars / totalTicks));
+      const step = Math.max(2, Math.ceil(remainingChars / totalTicks)) * charsPerTick(fullText);
 
       let charIndex = INITIAL_CHARS;
 
       streamingIntervalRef.current = setInterval(() => {
-        charIndex += charsPerTick;
+        charIndex += step;
 
         if (charIndex >= fullText.length) {
           // Streaming complete - show full text

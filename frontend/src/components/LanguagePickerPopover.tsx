@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LANGUAGE_OPTIONS } from "@/lib/summary-languages";
+import { languageDisplayName } from "@/lib/language";
 import { useRecentLanguages } from "@/hooks/useRecentLanguages";
 
 interface LanguagePickerPopoverProps {
@@ -55,7 +56,7 @@ export function LanguagePickerPopover({
     return options.filter(
       (l) =>
         l.code.toLowerCase().includes(filter) ||
-        l.label.toLowerCase().includes(filter),
+        languageDisplayName(l.code).toLowerCase().includes(filter),
     );
   }, [filter, mode, recentCodes]);
 
@@ -68,12 +69,12 @@ export function LanguagePickerPopover({
           (l) =>
             !filter ||
             l.code.toLowerCase().includes(filter) ||
-            l.label.toLowerCase().includes(filter),
+            languageDisplayName(l.code).toLowerCase().includes(filter),
         ),
     [recents, filter],
   );
 
-  const showAuto = mode === "meeting" && (!filter || "auto".includes(filter));
+  const showAuto = mode === "meeting" && (!filter || "auto".includes(filter) || "自动检测".includes(filter));
   const showRecents = mode === "meeting" && recentsResolved.length > 0;
   const hasNoResults =
     filteredAll.length === 0 && recentsResolved.length === 0 && !showAuto;
@@ -83,7 +84,7 @@ export function LanguagePickerPopover({
       ref={containerRef}
       className="w-72 rounded-lg bg-white border border-gray-200 shadow-lg overflow-hidden"
       role="dialog"
-      aria-label="Pick summary language"
+      aria-label="选择纪要语言"
     >
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-100">
         <span className="text-gray-400 text-sm">🔍</span>
@@ -92,7 +93,7 @@ export function LanguagePickerPopover({
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search language..."
+          placeholder="搜索语言…"
           className="flex-1 text-sm text-gray-900 bg-transparent border-none outline-none placeholder-gray-400"
         />
       </div>
@@ -101,7 +102,7 @@ export function LanguagePickerPopover({
         {showRecents && (
           <>
             <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-              Recently Used
+              最近使用
             </div>
             {recentsResolved.map((opt) => (
               <button
@@ -114,7 +115,7 @@ export function LanguagePickerPopover({
                 }`}
               >
                 <span>
-                  {opt.label}{" "}
+                  {languageDisplayName(opt.code)}{" "}
                   <span className="text-xs text-gray-400">({opt.code})</span>
                 </span>
                 {value === opt.code && <span className="text-blue-600" aria-hidden="true">✓</span>}
@@ -134,7 +135,7 @@ export function LanguagePickerPopover({
             }`}
           >
             <span className="flex flex-col">
-              <span>Auto</span>
+              <span>自动检测</span>
               {autoSubtitle && (
                 <span className="text-xs font-normal text-gray-400">{autoSubtitle}</span>
               )}
@@ -145,7 +146,7 @@ export function LanguagePickerPopover({
 
         {filteredAll.length > 0 && (
           <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-            {mode === "meeting" ? "Other Languages" : "All Languages"}
+            {mode === "meeting" ? "其他语言" : "全部语言"}
           </div>
         )}
 
@@ -160,7 +161,7 @@ export function LanguagePickerPopover({
             }`}
           >
             <span>
-              {opt.label}{" "}
+              {languageDisplayName(opt.code)}{" "}
               <span className="text-xs text-gray-400">({opt.code})</span>
             </span>
             {value === opt.code && <span className="text-blue-600" aria-hidden="true">✓</span>}
@@ -168,7 +169,7 @@ export function LanguagePickerPopover({
         ))}
 
         {hasNoResults && (
-          <div className="px-3 py-2 text-sm text-gray-400">No matches</div>
+          <div className="px-3 py-2 text-sm text-gray-400">无匹配</div>
         )}
       </div>
     </div>

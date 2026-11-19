@@ -51,7 +51,7 @@ for (const result of ['stopped', 'already_stopping', 'not_active']) {
     if (result === 'stopped') expect(postprocess).toHaveBeenCalledWith(true);
     else expect(postprocess).not.toHaveBeenCalled();
     expect(initiate).toHaveBeenCalledTimes(result === 'stopped' ? 1 : 0);
-    expect(JSON.stringify(renderer!.toJSON())).not.toContain('Processing recording...');
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain('正在处理录音…');
   });
 }
 
@@ -78,9 +78,8 @@ test('owner completion waits for the native stop and preserves errors', async ()
 });
 
 for (const message of [
-  'Your saved audio selection needs updating. Choose a device in Recording Settings.',
-  'Your saved microphone selection needs updating. Choose a device in Recording Settings.',
-  'Your saved system-audio selection needs updating. Choose a device in Recording Settings.',
+  '你保存的麦克风选择需要更新，请在录音设置中重新选择设备。',
+  '你保存的系统声音选择需要更新，请在录音设置中重新选择设备。',
 ]) {
   test(`Start preserves migration repair guidance: ${message}`, async () => {
     await act(async () => {
@@ -89,7 +88,7 @@ for (const message of [
         isRecordingDisabled={false} isParentProcessing={false} />);
     });
     await act(async () => { renderer!.root.findAllByType('button')[0].props.onClick(); });
-    expect(JSON.stringify(renderer!.toJSON())).toContain(message);
+    expect(JSON.stringify(renderer!.toJSON())).toContain('你保存的麦克风/系统声音选择需要更新，请在录音设置中重新选择设备。');
   });
 }
 
@@ -104,7 +103,7 @@ test('global stopping keeps the processing indicator after a losing Stop', async
   await act(async () => { renderer!.root.findAllByType('button')[1].props.onClick(); });
   globalStopping = true;
   await act(async () => { renderer!.update(<RecordingControls {...props} />); });
-  expect(JSON.stringify(renderer!.toJSON())).toContain('Processing recording...');
+  expect(JSON.stringify(renderer!.toJSON())).toContain('正在处理录音…');
   expect(postprocess).not.toHaveBeenCalled();
   globalStopping = false;
 });

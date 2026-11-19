@@ -2,9 +2,9 @@ name: "CN Tests"
 
 on:
   push:
-    branches: [cn]
+    branches: [cn, phase2]
   pull_request:
-    branches: [cn]
+    branches: [cn, phase2]
   workflow_dispatch:
 
 permissions:
@@ -23,11 +23,12 @@ jobs:
       # test_get_output_device 需要真实音频输出设备，GitHub runner 上失败并让整个 lib 测试进程 AV 崩溃
       # runner 的 PATH 里另有一个 1.17.1 的 onnxruntime.dll，会让 ort(1.22.x) 初始化失败；
       # 把 build script 下载的 1.22 放到测试 exe 同目录，Windows 先搜应用目录再搜 PATH
+      # test_list_system_audio_devices（COM 枚举音频设备）同样依赖真实音频硬件，runner 上必崩（0xc0000005），一并跳过
       - name: cargo test
         run: |
           cargo test --workspace --no-run
           cp frontend/src-tauri/binaries/onnxruntime/*.dll target/debug/deps/
-          cargo test --workspace --no-fail-fast -- --skip audio::playback_monitor::tests::test_get_output_device
+          cargo test --workspace --no-fail-fast -- --test-threads=1 --skip audio::playback_monitor::tests::test_get_output_device --skip audio::system_audio_commands::tests::test_list_system_audio_devices
 
   frontend:
     runs-on: ubuntu-latest

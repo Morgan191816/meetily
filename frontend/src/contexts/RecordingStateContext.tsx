@@ -159,7 +159,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
           console.log('[RecordingStateContext] Recording starting event');
           setState(prev => prev.status === RecordingStatus.RECORDING
             ? prev
-            : { ...prev, status: RecordingStatus.STARTING, statusMessage: 'Starting recording...' });
+            : { ...prev, status: RecordingStatus.STARTING, statusMessage: '正在开始录音…' });
         });
         unsubscribers.push(unlistenStarting);
 
@@ -167,7 +167,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
           if (payload.stage !== 'stopping_audio') return;
           setState(prev => (prev.status === RecordingStatus.RECORDING ||
             (prev.status === RecordingStatus.IDLE && prev.isRecording))
-            ? { ...prev, status: RecordingStatus.STOPPING, statusMessage: 'Stopping recording...' }
+            ? { ...prev, status: RecordingStatus.STOPPING, statusMessage: '正在停止录音…' }
             : prev);
         });
         unsubscribers.push(unlistenShutdown);
@@ -189,7 +189,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
             return {
               ...prev,
               status: newStatus,
-              statusMessage: newStatus === RecordingStatus.STOPPING ? 'Stopping recording...' : prev.statusMessage,
+              statusMessage: newStatus === RecordingStatus.STOPPING ? '正在停止录音…' : prev.statusMessage,
               isRecording: false,
               isPaused: false,
               isActive: false,
@@ -288,7 +288,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
           // selected mic that wasn't available at start (backend fell back to
           // the default). Copy is worded to be accurate for both.
           toast.info(
-            `Microphone switched to ${label} for this meeting.`,
+            `麦克风已切换为 ${label}，本次会议将使用该设备。`,
             { duration: 6000 }
           );
         });
@@ -303,7 +303,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
           // available" — expected, not an error worth a toast.
           if (isRecordingRef.current) {
             toast.error(
-              `Microphone fallback failed for ${label}: ${error}`,
+              `麦克风回退失败（${label}）：${error}`,
               { duration: 8000 }
             );
           }
@@ -316,7 +316,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
           // Fires at recording start, before isRecording flips true, so this
           // is intentionally NOT gated by isRecordingRef.
           toast.error(
-            'No microphone available — recording system audio only.',
+            '没有可用的麦克风——仅录制系统声音。',
             { duration: 8000 }
           );
         });
@@ -330,7 +330,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
           // mic-swap-failed so a stale event after Stop doesn't alarm the user.
           if (isRecordingRef.current) {
             toast.error(
-              `Microphone '${label}' could not be recovered — recording continues without a microphone. Stop and restart to fix.`,
+              `麦克风「${label}」无法恢复——录音将继续，但不会采集麦克风声音。请停止后重新开始录音以修复。`,
               { duration: 10000 }
             );
           }

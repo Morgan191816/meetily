@@ -25,7 +25,7 @@ const Logo = React.forwardRef<HTMLButtonElement, LogoProps>(
               ref={ref}
               type="button"
               className="flex items-center justify-center mb-2 cursor-pointer bg-transparent border-none p-0 hover:opacity-80 transition-opacity"
-              aria-label="About Morgan Meet"
+              aria-label="关于 Morgan Meet"
             >
               {doodleSrc && doodleSrc !== failedSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -55,7 +55,7 @@ const Logo = React.forwardRef<HTMLButtonElement, LogoProps>(
               ref={ref}
               type="button"
               className="w-full text-lg text-center border rounded-full bg-blue-50 border-white font-semibold text-gray-700 mb-2 block items-center cursor-pointer hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              aria-label="About Morgan Meet"
+              aria-label="关于 Morgan Meet"
             >
               <span>Morgan Meet</span>
             </button>
@@ -63,7 +63,7 @@ const Logo = React.forwardRef<HTMLButtonElement, LogoProps>(
         )}
         <DialogContent>
           <VisuallyHidden>
-            <DialogTitle>About Morgan Meet</DialogTitle>
+            <DialogTitle>关于 Morgan Meet</DialogTitle>
           </VisuallyHidden>
           <About />
         </DialogContent>

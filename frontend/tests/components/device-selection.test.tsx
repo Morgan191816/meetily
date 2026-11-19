@@ -26,7 +26,7 @@ test('recording device settings render after loading without OS plugin internals
   await act(async () => {
     renderer = create(<DeviceSelection selectedDevices={{ micDevice: null, systemDevice: null }} onDeviceChange={() => {}} />);
   });
-  expect(JSON.stringify(renderer!.toJSON())).toContain('System Audio');
+  expect(JSON.stringify(renderer!.toJSON())).toContain('系统声音');
 });
 
 test('unavailable saved selections remain selected without resetting preferences', async () => {

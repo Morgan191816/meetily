@@ -18,7 +18,7 @@ export function About() {
                 <div className="mb-3">
                     <Image
                         src="icon_128x128.png"
-                        alt="Morgan Meet Logo"
+                        alt="Morgan Meet 标志"
                         width={64}
                         height={64}
                         className="mx-auto"
@@ -27,29 +27,29 @@ export function About() {
                 <h1 className="text-xl font-bold text-gray-900">Morgan Meet</h1>
                 <span className="text-sm text-gray-500"> v{currentVersion}</span>
                 <p className="text-medium text-gray-600 mt-1">
-                    本地会议转录与纪要工具
+                    本地会议转写与纪要工具
                 </p>
             </div>
 
             {/* Features Grid - Compact */}
             <div className="space-y-3">
-                <h2 className="text-base font-semibold text-gray-800">What makes Morgan Meet different</h2>
+                <h2 className="text-base font-semibold text-gray-800">Morgan Meet 的不同之处</h2>
                 <div className="grid grid-cols-2 gap-2">
                     <div className="bg-gray-50 rounded p-3 hover:bg-gray-100 transition-colors">
-                        <h3 className="font-bold text-sm text-gray-900 mb-1">Privacy-first</h3>
-                        <p className="text-xs text-gray-600 leading-relaxed">Your data & AI processing workflow can now stay within your premise. No cloud, no leaks.</p>
+                        <h3 className="font-bold text-sm text-gray-900 mb-1">隐私优先</h3>
+                        <p className="text-xs text-gray-600 leading-relaxed">数据与 AI 处理流程都可以留在本地，不上云、不外泄。</p>
                     </div>
                     <div className="bg-gray-50 rounded p-3 hover:bg-gray-100 transition-colors">
-                        <h3 className="font-bold text-sm text-gray-900 mb-1">Use Any Model</h3>
-                        <p className="text-xs text-gray-600 leading-relaxed">Prefer local open-source model? Great. Want to plug in an external API? Also fine. No lock-in.</p>
+                        <h3 className="font-bold text-sm text-gray-900 mb-1">模型自由选择</h3>
+                        <p className="text-xs text-gray-600 leading-relaxed">可以用本地开源模型，也可以接入外部 API，不被单一厂商绑定。</p>
                     </div>
                     <div className="bg-gray-50 rounded p-3 hover:bg-gray-100 transition-colors">
-                        <h3 className="font-bold text-sm text-gray-900 mb-1">Cost-Smart</h3>
-                        <p className="text-xs text-gray-600 leading-relaxed">Avoid pay-per-minute bills by running models locally (or pay only for the calls you choose).</p>
+                        <h3 className="font-bold text-sm text-gray-900 mb-1">成本可控</h3>
+                        <p className="text-xs text-gray-600 leading-relaxed">本地运行模型，避免按分钟计费；也可以只为选用的调用付费。</p>
                     </div>
                     <div className="bg-gray-50 rounded p-3 hover:bg-gray-100 transition-colors">
-                        <h3 className="font-bold text-sm text-gray-900 mb-1">Works everywhere</h3>
-                        <p className="text-xs text-gray-600 leading-relaxed">Google Meet, Zoom, Teams-online or offline.</p>
+                        <h3 className="font-bold text-sm text-gray-900 mb-1">随处可用</h3>
+                        <p className="text-xs text-gray-600 leading-relaxed">Google Meet、Zoom、Teams——线上或线下均可。</p>
                     </div>
                 </div>
             </div>
@@ -57,7 +57,7 @@ export function About() {
             {/* Coming Soon - Compact */}
             <div className="bg-blue-50 rounded p-3">
                 <p className="text-s text-blue-800">
-                    <span className="font-bold">Coming soon:</span> A library of on-device AI agents-automating follow-ups, action tracking, and more.
+                    <span className="font-bold">即将推出：</span>设备端 AI 助手库——自动跟进事项、跟踪行动项等。
                 </p>
             </div>
         </div>

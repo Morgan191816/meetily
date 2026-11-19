@@ -46,7 +46,7 @@ pub async fn whisper_init() -> Result<(), String> {
 
     let models_dir = get_models_directory();
     let engine = WhisperEngine::new_with_models_dir(models_dir)
-        .map_err(|e| format!("Failed to initialize whisper engine: {}", e))?;
+        .map_err(|e| format!("Whisper 引擎初始化失败：{}", e))?;
     *guard = Some(Arc::new(engine));
     Ok(())
 }
@@ -62,7 +62,7 @@ pub async fn whisper_get_available_models() -> Result<Vec<ModelInfo>, String> {
         engine
             .discover_models()
             .await
-            .map_err(|e| format!("Failed to discover models: {}", e))
+            .map_err(|e| format!("无法发现模型：{}", e))
     } else {
         // Fallback: scan models directory directly without initialized engine
         log::info!("Whisper engine not initialized, scanning models directory directly");
@@ -76,7 +76,7 @@ fn discover_models_standalone() -> Result<Vec<ModelInfo>, String> {
     use crate::whisper_engine::ModelStatus;
 
     let models_dir = get_models_directory()
-        .ok_or_else(|| "Models directory not initialized".to_string())?;
+        .ok_or_else(|| "模型目录未初始化".to_string())?;
 
     // Whisper models are stored directly in the models directory (not in a whisper subdirectory)
     let whisper_dir = models_dir.clone();
@@ -147,7 +147,7 @@ pub async fn whisper_load_model(
         let result = engine
             .load_model(&model_name)
             .await
-            .map_err(|e| format!("Failed to load model: {}", e));
+            .map_err(|e| format!("模型加载失败：{}", e));
 
         // FIX 6: Emit model loading completed/failed event
         if result.is_ok() {
@@ -173,7 +173,7 @@ pub async fn whisper_load_model(
 
         result
     } else {
-        Err("Whisper engine not initialized".to_string())
+        Err("Whisper 引擎未初始化".to_string())
     }
 }
 
@@ -187,7 +187,7 @@ pub async fn whisper_get_current_model() -> Result<Option<String>, String> {
     if let Some(engine) = engine {
         Ok(engine.get_current_model().await)
     } else {
-        Err("Whisper engine not initialized".to_string())
+        Err("Whisper 引擎未初始化".to_string())
     }
 }
 
@@ -201,7 +201,7 @@ pub async fn whisper_is_model_loaded() -> Result<bool, String> {
     if let Some(engine) = engine {
         Ok(engine.is_model_loaded().await)
     } else {
-        Err("Whisper engine not initialized".to_string())
+        Err("Whisper 引擎未初始化".to_string())
     }
 }
 
@@ -216,7 +216,7 @@ pub async fn whisper_has_available_models() -> Result<bool, String> {
         let models = engine
             .discover_models()
             .await
-            .map_err(|e| format!("Failed to discover models: {}", e))?;
+            .map_err(|e| format!("无法发现模型：{}", e))?;
 
         // Check if at least one model is available
         let available_models: Vec<_> = models
@@ -249,7 +249,7 @@ pub async fn whisper_validate_model_ready() -> Result<String, String> {
         let models = engine
             .discover_models()
             .await
-            .map_err(|e| format!("Failed to discover models: {}", e))?;
+            .map_err(|e| format!("无法发现模型：{}", e))?;
 
         let available_models: Vec<_> = models
             .iter()
@@ -258,7 +258,7 @@ pub async fn whisper_validate_model_ready() -> Result<String, String> {
 
         if available_models.is_empty() {
             return Err(
-                "No Whisper models are available. Please download a model to enable transcription."
+                "没有可用的 Whisper 模型，请先下载模型后再开始转写。"
                     .to_string(),
             );
         }
@@ -268,11 +268,11 @@ pub async fn whisper_validate_model_ready() -> Result<String, String> {
         engine
             .load_model(&first_model.name)
             .await
-            .map_err(|e| format!("Failed to load model {}: {}", first_model.name, e))?;
+            .map_err(|e| format!("模型 {} 加载失败：{}", first_model.name, e))?;
 
         Ok(first_model.name.clone())
     } else {
-        Err("Whisper engine not initialized".to_string())
+        Err("Whisper 引擎未初始化".to_string())
     }
 }
 
@@ -336,7 +336,7 @@ pub async fn whisper_validate_model_ready_with_config<R: tauri::Runtime>(
         let models = engine
             .discover_models()
             .await
-            .map_err(|e| format!("Failed to discover models: {}", e))?;
+            .map_err(|e| format!("无法发现模型：{}", e))?;
 
         let available_models: Vec<_> = models
             .iter()
@@ -345,7 +345,7 @@ pub async fn whisper_validate_model_ready_with_config<R: tauri::Runtime>(
 
         if available_models.is_empty() {
             return Err(
-                "No Whisper models are available. Please download a model to enable transcription."
+                "没有可用的 Whisper 模型，请先下载模型后再开始转写。"
                     .to_string(),
             );
         }
@@ -376,11 +376,11 @@ pub async fn whisper_validate_model_ready_with_config<R: tauri::Runtime>(
         engine
             .load_model(&model_name)
             .await
-            .map_err(|e| format!("Failed to load model {}: {}", model_name, e))?;
+            .map_err(|e| format!("模型 {} 加载失败：{}", model_name, e))?;
 
         Ok(model_name)
     } else {
-        Err("Whisper engine not initialized".to_string())
+        Err("Whisper 引擎未初始化".to_string())
     }
 }
 
@@ -397,9 +397,9 @@ pub async fn whisper_transcribe_audio(audio_data: Vec<f32>) -> Result<String, St
         engine
             .transcribe_audio(audio_data, language)
             .await
-            .map_err(|e| format!("Transcription failed: {}", e))
+            .map_err(|e| format!("转写失败：{}", e))
     } else {
-        Err("Whisper engine not initialized".to_string())
+        Err("Whisper 引擎未初始化".to_string())
     }
 }
 
@@ -414,7 +414,7 @@ pub async fn whisper_get_models_directory() -> Result<String, String> {
         let path = engine.get_models_directory().await;
         Ok(path.to_string_lossy().to_string())
     } else {
-        Err("Whisper engine not initialized".to_string())
+        Err("Whisper 引擎未初始化".to_string())
     }
 }
 
@@ -483,11 +483,11 @@ pub async fn whisper_download_model(
                 ) {
                     log::error!("Failed to emit download error event: {}", emit_e);
                 }
-                Err(format!("Failed to download model: {}", e))
+                Err(format!("模型下载失败：{}", e))
             }
         }
     } else {
-        Err("Whisper engine not initialized".to_string())
+        Err("Whisper 引擎未初始化".to_string())
     }
 }
 
@@ -502,9 +502,9 @@ pub async fn whisper_cancel_download(model_name: String) -> Result<CancelDownloa
         engine
             .cancel_download(&model_name)
             .await
-            .map_err(|e| format!("Failed to cancel download: {}", e))
+            .map_err(|e| format!("取消下载失败：{}", e))
     } else {
-        Err("Whisper engine not initialized".to_string())
+        Err("Whisper 引擎未初始化".to_string())
     }
 }
 
@@ -519,9 +519,9 @@ pub async fn whisper_delete_corrupted_model(model_name: String) -> Result<String
         engine
             .delete_model(&model_name)
             .await
-            .map_err(|e| format!("Failed to delete model: {}", e))
+            .map_err(|e| format!("删除模型失败：{}", e))
     } else {
-        Err("Whisper engine not initialized".to_string())
+        Err("Whisper 引擎未初始化".to_string())
     }
 }
 
@@ -529,12 +529,12 @@ pub async fn whisper_delete_corrupted_model(model_name: String) -> Result<String
 #[command]
 pub async fn open_models_folder() -> Result<(), String> {
     let models_dir = get_models_directory()
-        .ok_or_else(|| "Models directory not initialized".to_string())?;
+        .ok_or_else(|| "模型目录未初始化".to_string())?;
 
     // Ensure directory exists before trying to open it
     if !models_dir.exists() {
         std::fs::create_dir_all(&models_dir)
-            .map_err(|e| format!("Failed to create directory: {}", e))?;
+            .map_err(|e| format!("创建目录失败：{}", e))?;
     }
 
     let folder_path = models_dir.to_string_lossy().to_string();
@@ -544,7 +544,7 @@ pub async fn open_models_folder() -> Result<(), String> {
         std::process::Command::new("explorer")
             .arg(&folder_path)
             .spawn()
-            .map_err(|e| format!("Failed to open folder: {}", e))?;
+            .map_err(|e| format!("打开文件夹失败：{}", e))?;
     }
 
     #[cfg(target_os = "macos")]
@@ -552,7 +552,7 @@ pub async fn open_models_folder() -> Result<(), String> {
         std::process::Command::new("open")
             .arg(&folder_path)
             .spawn()
-            .map_err(|e| format!("Failed to open folder: {}", e))?;
+            .map_err(|e| format!("打开文件夹失败：{}", e))?;
     }
 
     #[cfg(target_os = "linux")]
@@ -560,7 +560,7 @@ pub async fn open_models_folder() -> Result<(), String> {
         std::process::Command::new("xdg-open")
             .arg(&folder_path)
             .spawn()
-            .map_err(|e| format!("Failed to open folder: {}", e))?;
+            .map_err(|e| format!("打开文件夹失败：{}", e))?;
     }
 
     log::info!("Opened models folder: {}", folder_path);

@@ -51,13 +51,24 @@ function formatRecordingTime(seconds: number | undefined): string {
 }
 
 // Helper function to remove filler words and repetitions
-function cleanStopWords(text: string): string {
-    const stopWords = ['uh', 'um', 'er', 'ah', 'hmm', 'hm', 'eh', 'oh'];
+export function cleanStopWords(text: string): string {
+    const stopWords = ['uh', 'um', 'er', 'ah', 'hmm', 'hm', 'eh', 'oh', '嗯', '呃', '额', '啊', '哦', '唔'];
+
+    // Same punctuation set for both languages; a space would split the sentence
+    const punctuation = '[，。、,？！；：\\s]*';
 
     let cleanedText = text;
     stopWords.forEach(word => {
-        const pattern = new RegExp(`\\b${word}\\b[,\\s]*`, 'gi');
-        cleanedText = cleanedText.replace(pattern, ' ');
+        // Chinese has no word boundaries: only strip a filler that stands alone,
+        // never one inside a real word (金额/额外/额度)
+        if (/[一-鿿]/.test(word)) {
+            cleanedText = cleanedText.replace(
+                new RegExp(`(^|[^\\u4e00-\\u9fff])${word}(?![\\u4e00-\\u9fff])${punctuation}`, 'g'),
+                '$1'
+            );
+            return;
+        }
+        cleanedText = cleanedText.replace(new RegExp(`\\b${word}\\b${punctuation}`, 'gi'), ' ');
     });
 
     return cleanedText.replace(/\s+/g, ' ').trim();
@@ -79,14 +90,14 @@ const TranscriptSegment = memo(function TranscriptSegment({
     isStreaming: boolean;
     showConfidence: boolean;
 }) {
-    const displayText = cleanStopWords(text) || (text.trim() === '' ? '[Silence]' : text);
+    const displayText = cleanStopWords(text) || (text.trim() === '' ? '[静音]' : text);
 
     return (
         <div id={`segment-${id}`} className="mb-3">
             <div className="flex items-start gap-2">
                 <Tooltip>
                     <TooltipTrigger>
-                        <span className="text-xs text-gray-400 mt-1 flex-shrink-0 min-w-[50px]">
+                        <span className="text-xs text-gray-400 mt-1 flex-shrink-0 min-w-[56px] tabular-nums">
                             {formatRecordingTime(timestamp)}
                         </span>
                     </TooltipTrigger>
@@ -99,10 +110,10 @@ const TranscriptSegment = memo(function TranscriptSegment({
                 <div className="flex-1">
                     {isStreaming ? (
                         <div className="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
-                            <p className="text-base text-gray-800 leading-relaxed">{displayText}</p>
+                            <p className="text-base text-gray-800 leading-relaxed break-words">{displayText}</p>
                         </div>
                     ) : (
-                        <p className="text-base text-gray-800 leading-relaxed">{displayText}</p>
+                        <p className="text-base text-gray-800 leading-relaxed break-words">{displayText}</p>
                     )}
                 </div>
             </div>
@@ -249,16 +260,16 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                 <div className={`w-3 h-3 rounded-full ${isPaused ? 'bg-orange-500' : 'bg-blue-500 animate-pulse'}`}></div>
                             </div>
                             <p className="text-sm text-gray-600">
-                                {isPaused ? 'Recording paused' : 'Listening for speech...'}
+                                {isPaused ? '录音已暂停' : '正在聆听…'}
                             </p>
                             <p className="text-xs mt-1 text-gray-400">
-                                {isPaused ? 'Click resume to continue recording' : 'Speak to see live transcription'}
+                                {isPaused ? '点击继续录音' : '说话即可看到实时逐字稿'}
                             </p>
                         </>
                     ) : (
                         <>
-                            <p className="text-lg font-semibold">Welcome to Morgan Meet!</p>
-                            <p className="text-xs mt-1">Start recording to see live transcription</p>
+                            <p className="text-lg font-semibold">欢迎使用 Morgan Meet！</p>
+                            <p className="text-xs mt-1">开始录音即可看到实时逐字稿</p>
                         </>
                     )}
                 </motion.div>
@@ -308,11 +319,11 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                             {isLoadingMore ? (
                                 <div className="flex items-center gap-2 text-gray-500">
                                     <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
-                                    <span className="text-sm">Loading more...</span>
+                                    <span className="text-sm">正在加载更多…</span>
                                 </div>
                             ) : hasMore && totalCount > 0 ? (
                                 <span className="text-sm text-gray-400">
-                                    Showing {loadedCount} of {totalCount} segments
+                                    已显示 {loadedCount} / {totalCount} 条
                                 </span>
                             ) : null}
                         </div>
@@ -327,7 +338,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                             className="flex items-center gap-2 mt-4 text-gray-500"
                         >
                             <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                            <span className="text-sm">Listening...</span>
+                            <span className="text-sm">正在聆听…</span>
                         </motion.div>
                     )}
                 </>
@@ -364,11 +375,11 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                             {isLoadingMore ? (
                                 <div className="flex items-center gap-2 text-gray-500">
                                     <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
-                                    <span className="text-sm">Loading more...</span>
+                                    <span className="text-sm">正在加载更多…</span>
                                 </div>
                             ) : hasMore && totalCount > 0 ? (
                                 <span className="text-sm text-gray-400">
-                                    Showing {loadedCount} of {totalCount} segments
+                                    已显示 {loadedCount} / {totalCount} 条
                                 </span>
                             ) : null}
                         </div>
@@ -383,7 +394,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                             className="flex items-center gap-2 mt-4 text-gray-500"
                         >
                             <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                            <span className="text-sm">Listening...</span>
+                            <span className="text-sm">正在聆听…</span>
                         </motion.div>
                     )}
                 </>

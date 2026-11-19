@@ -45,7 +45,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
         setPreferences(prefs);
       } catch (error) {
         console.error('Failed to load recording preferences:', error);
-        toast.error('Could not load recording preferences', { description: String(error) });
+        toast.error('无法加载录音偏好设置', { description: String(error) });
         // If loading fails, get default folder path
         try {
           const defaultPath = await invoke<string>('get_default_recordings_folder_path');
@@ -128,13 +128,13 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       const store = await Store.load('preferences.json');
       await store.set('show_recording_notification', enabled);
       await store.save();
-      toast.success('Preference saved');
+      toast.success('偏好设置已保存');
       await Analytics.track('recording_notification_preference_changed', {
         enabled: enabled.toString()
       });
     } catch (error) {
       console.error('Failed to save notification preference:', error);
-      toast.error('Failed to save preference');
+      toast.error('保存偏好设置失败');
     }
   };
 
@@ -148,14 +148,14 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       onSave?.(saved);
 
       // Show success toast with device details
-      const micDevice = prefs.preferred_mic_device ? cachedDeviceLabel(prefs.preferred_mic_device) : 'Default';
-      const systemDevice = prefs.preferred_system_device ? cachedDeviceLabel(prefs.preferred_system_device) : 'Default';
-      toast.success("Device preferences saved", {
-        description: `Microphone: ${micDevice}, System Audio: ${systemDevice}`
+      const micDevice = prefs.preferred_mic_device ? cachedDeviceLabel(prefs.preferred_mic_device) : '默认';
+      const systemDevice = prefs.preferred_system_device ? cachedDeviceLabel(prefs.preferred_system_device) : '默认';
+      toast.success("设备偏好已保存", {
+        description: `麦克风：${micDevice}，系统声音：${systemDevice}`
       });
     } catch (error) {
       console.error('Failed to save recording preferences:', error);
-      toast.error("Failed to save device preferences", {
+      toast.error("保存设备偏好失败", {
         description: error instanceof Error ? error.message : String(error)
       });
     } finally {
@@ -175,18 +175,18 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-4">Recording Settings</h3>
+        <h3 className="text-lg font-semibold mb-4">录音设置</h3>
         <p className="text-sm text-gray-600 mb-6">
-          Configure how your audio recordings are saved during meetings.
+          配置会议期间音频录音的保存方式。
         </p>
       </div>
 
       {/* Auto Save Toggle */}
       <div className="flex items-center justify-between p-4 border rounded-lg">
         <div className="flex-1">
-          <div className="font-medium">Save Audio Recordings</div>
+          <div className="font-medium">保存音频录音</div>
           <div className="text-sm text-gray-600">
-            Automatically save audio files when recording stops
+            停止录音后自动保存音频文件
           </div>
         </div>
         <Switch
@@ -200,25 +200,25 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       {preferences.auto_save && (
         <div className="space-y-4">
           <div className="p-4 border rounded-lg bg-gray-50">
-            <div className="font-medium mb-2">Save Location</div>
+            <div className="font-medium mb-2">保存位置</div>
             <div className="text-sm text-gray-600 mb-3 break-all">
-              {preferences.save_folder || 'Default folder'}
+              {preferences.save_folder || '默认文件夹'}
             </div>
             <button
               onClick={handleOpenFolder}
               className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
             >
               <FolderOpen className="w-4 h-4" />
-              Open Folder
+              打开文件夹
             </button>
           </div>
 
           <div className="p-4 border rounded-lg bg-blue-50">
             <div className="text-sm text-blue-800">
-              <strong>File Format:</strong> {preferences.file_format.toUpperCase()} files
+              <strong>文件格式：</strong>{preferences.file_format.toUpperCase()} 文件
             </div>
             <div className="text-xs text-blue-600 mt-1">
-              Recordings are saved with timestamp: recording_YYYYMMDD_HHMMSS.{preferences.file_format}
+              录音按时间戳命名：recording_YYYYMMDD_HHMMSS.{preferences.file_format}
             </div>
           </div>
         </div>
@@ -228,7 +228,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       {!preferences.auto_save && (
         <div className="p-4 border rounded-lg bg-yellow-50">
           <div className="text-sm text-yellow-800">
-            Audio recording is disabled. Enable "Save Audio Recordings" to automatically save your meeting audio.
+            音频录音已关闭。开启「保存音频录音」即可自动保存会议音频。
           </div>
         </div>
       )}
@@ -236,9 +236,9 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       {/* Recording Notification Toggle */}
       <div className="flex items-center justify-between p-4 border rounded-lg">
         <div className="flex-1">
-          <div className="font-medium">Recording Start Notification</div>
+          <div className="font-medium">录音开始提醒</div>
           <div className="text-sm text-gray-600">
-            Show reminder to inform participants when recording starts
+            录音开始时显示提醒，告知参会人员
           </div>
         </div>
         <Switch
@@ -250,9 +250,9 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       {/* Device Preferences */}
       <div className="space-y-4">
         <div className="border-t pt-6">
-          <h4 className="text-base font-medium text-gray-900 mb-4">Default Audio Devices</h4>
+          <h4 className="text-base font-medium text-gray-900 mb-4">默认音频设备</h4>
           <p className="text-sm text-gray-600 mb-4">
-            Set your preferred microphone and system audio devices for recording. These will be automatically selected when starting new recordings.
+            设置录音首选的麦克风与系统声音设备。开始新录音时会自动选用。
           </p>
 
           {isRecording && (
@@ -261,7 +261,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
               aria-live="polite"
               className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2 mb-4"
             >
-              Device selection is locked while a recording is in progress. Connecting a new device mid-recording will not switch to it. Stop the current meeting to change devices.
+              录音进行中时无法更改设备。录音过程中连接的新设备不会被自动切换。请停止当前会议后再更改设备。
             </p>
           )}
 

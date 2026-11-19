@@ -10,7 +10,13 @@ module.exports = {
   	extend: {
   		fontFamily: {
   			sans: [
-  				'var(--font-source-sans-3)'
+  				'-apple-system',
+  				'BlinkMacSystemFont',
+  				'"Segoe UI"',
+  				'"PingFang SC"',
+  				'"Microsoft YaHei"',
+  				'"Noto Sans SC"',
+  				'sans-serif',
   			]
   		},
   		colors: {

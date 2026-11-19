@@ -762,7 +762,7 @@ impl AudioStreamManager {
                         );
                         if self.microphone_stream.is_some() && !cancelled && !already_reported {
                             self.state.report_error(super::recording_state::AudioError::LinuxCapture(format!(
-                                "System audio could not start ({}). Recording continues with the microphone only.",
+                                "系统声音无法启动（{}）。将仅使用麦克风继续录音。",
                                 message
                             )));
                         }
@@ -1042,7 +1042,7 @@ mod linux_startup_tests {
         let messages = messages.lock().unwrap();
         assert_eq!(messages.len(), 1);
         assert!(messages[0].contains("system unavailable"));
-        assert!(messages[0].contains("microphone only"));
+        assert!(messages[0].contains("麦克风"));
     }
 
     #[tokio::test]

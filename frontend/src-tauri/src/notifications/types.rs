@@ -131,8 +131,8 @@ impl Default for NotificationTimeout {
 impl Notification {
     pub fn recording_started(meeting_name: Option<String>) -> Self {
         let body = match meeting_name {
-            Some(name) => format!("Recording started for meeting: {}", name),
-            None => "Recording has started. Please inform others in the meeting that you are recording.".to_string(),
+            Some(name) => format!("会议「{}」开始录音", name),
+            None => "录音已开始。请告知会议中的其他参会者你正在录音。".to_string(),
         };
 
         Notification::new("Morgan Meet", body, NotificationType::RecordingStarted)
@@ -143,7 +143,7 @@ impl Notification {
     pub fn recording_stopped() -> Self {
         Notification::new(
             "Morgan Meet",
-            "Recording has been stopped and saved",
+            "录音已停止并保存",
             NotificationType::RecordingStopped
         )
         .with_priority(NotificationPriority::Normal)
@@ -153,7 +153,7 @@ impl Notification {
     pub fn recording_paused() -> Self {
         Notification::new(
             "Morgan Meet",
-            "Recording has been paused",
+            "录音已暂停",
             NotificationType::RecordingPaused
         )
         .with_priority(NotificationPriority::Normal)
@@ -163,7 +163,7 @@ impl Notification {
     pub fn recording_resumed() -> Self {
         Notification::new(
             "Morgan Meet",
-            "Recording has been resumed",
+            "录音已恢复",
             NotificationType::RecordingResumed
         )
         .with_priority(NotificationPriority::Normal)
@@ -172,8 +172,8 @@ impl Notification {
 
     pub fn transcription_complete(file_path: Option<String>) -> Self {
         let body = match file_path {
-            Some(path) => format!("Transcription completed and saved to: {}", path),
-            None => "Transcription has been completed".to_string(),
+            Some(path) => format!("转写已完成，已保存至：{}", path),
+            None => "转写已完成".to_string(),
         };
 
         Notification::new("Morgan Meet", body, NotificationType::TranscriptionComplete)
@@ -183,8 +183,8 @@ impl Notification {
 
     pub fn meeting_reminder(minutes_until: u64, meeting_title: Option<String>) -> Self {
         let body = match meeting_title {
-            Some(title) => format!("Meeting '{}' starts in {} minutes", title, minutes_until),
-            None => format!("Meeting starts in {} minutes", minutes_until),
+            Some(title) => format!("会议「{}」将在 {} 分钟后开始", title, minutes_until),
+            None => format!("会议将在 {} 分钟后开始", minutes_until),
         };
 
         Notification::new("Morgan Meet", body, NotificationType::MeetingReminder(minutes_until))
@@ -195,7 +195,7 @@ impl Notification {
     pub fn system_error(error: impl Into<String>) -> Self {
         let error_string = error.into();
         Notification::new(
-            "Morgan Meet Error",
+            "Morgan Meet 错误",
             error_string.clone(),
             NotificationType::SystemError(error_string)
         )
@@ -206,7 +206,7 @@ impl Notification {
     pub fn test_notification() -> Self {
         Notification::new(
             "Morgan Meet",
-            "This is a test notification to verify the system is working correctly",
+            "这是一条测试通知，用于确认系统工作正常。",
             NotificationType::Test
         )
         .with_priority(NotificationPriority::Normal)

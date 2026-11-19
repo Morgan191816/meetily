@@ -17,7 +17,7 @@ async fn await_or_cancel<T>(
 
     tokio::select! {
         biased;
-        _ = token.cancelled() => Err("Summary generation was cancelled".to_string()),
+        _ = token.cancelled() => Err("纪要生成已取消".to_string()),
         result = operation => Ok(result),
     }
 }
@@ -273,7 +273,7 @@ pub(crate) async fn generate_summary(
     // Check if cancelled before starting
     if let Some(token) = cancellation_token {
         if token.is_cancelled() {
-            return Err("Summary generation was cancelled".to_string());
+            return Err("纪要生成已取消".to_string());
         }
     }
 
@@ -383,27 +383,27 @@ pub(crate) async fn generate_summary(
                 result.map_err(|e| {
                     if e.is_timeout() {
                         format!(
-                            "LLM request timed out after {} seconds",
+                            "LLM 请求在 {} 秒后超时",
                             REQUEST_TIMEOUT_DURATION.as_secs()
                         )
                     } else {
-                        format!("Failed to send request to LLM: {}", e)
+                        format!("向 LLM 发送请求失败：{}", e)
                     }
                 })?
             }
             _ = token.cancelled() => {
-                return Err("Summary generation was cancelled".to_string());
+                return Err("纪要生成已取消".to_string());
             }
         }
     } else {
         request_future.await.map_err(|e| {
             if e.is_timeout() {
                 format!(
-                    "LLM request timed out after {} seconds",
+                    "LLM 请求在 {} 秒后超时",
                     REQUEST_TIMEOUT_DURATION.as_secs()
                 )
             } else {
-                format!("Failed to send request to LLM: {}", e)
+                format!("向 LLM 发送请求失败：{}", e)
             }
         })?
     };
@@ -414,11 +414,11 @@ pub(crate) async fn generate_summary(
         let status = response.status();
         let error_body = await_or_cancel(response.text(), cancellation_token)
             .await?
-            .unwrap_or_else(|error| format!("Failed to read LLM error response body: {error}"));
+            .unwrap_or_else(|error| format!("读取 LLM 错误响应内容失败：{error}"));
         if provider != &LLMProvider::Ollama || !ollama_rejects_reasoning_effort(status, &error_body) {
             warn!("{}", llm_http_failure_log_message(provider, status, error_body.len()));
             return Err(format!(
-                "LLM API request failed with status {}: {}",
+                "LLM 接口请求失败，状态码 {}：{}",
                 status, error_body
             ));
         }
@@ -427,7 +427,7 @@ pub(crate) async fn generate_summary(
         let mut retry_body = request_body;
         retry_body
             .as_object_mut()
-            .ok_or_else(|| "Failed to prepare Ollama compatibility retry".to_string())?
+            .ok_or_else(|| "准备 Ollama 兼容性重试失败".to_string())?
             .remove("reasoning_effort");
         let retry_future = client
             .post(api_url)
@@ -440,11 +440,11 @@ pub(crate) async fn generate_summary(
             .map_err(|e| {
                 if e.is_timeout() {
                     format!(
-                        "LLM retry request timed out after {} seconds",
+                        "LLM 重试请求在 {} 秒后超时",
                         REQUEST_TIMEOUT_DURATION.as_secs()
                     )
                 } else {
-                    format!("Failed to send retry request to LLM: {}", e)
+                    format!("向 LLM 发送重试请求失败：{}", e)
                 }
             })?
     };
@@ -453,7 +453,7 @@ pub(crate) async fn generate_summary(
         let status = response.status();
         let error_body = await_or_cancel(response.text(), cancellation_token)
             .await?
-            .unwrap_or_else(|error| format!("Failed to read LLM error response body: {error}"));
+            .unwrap_or_else(|error| format!("读取 LLM 错误响应内容失败：{error}"));
         warn!("{}", llm_http_failure_log_message(provider, status, error_body.len()));
         return Err(format!(
             "LLM API request failed with status {}: {}",
@@ -468,13 +468,13 @@ pub(crate) async fn generate_summary(
             cancellation_token,
         )
         .await?
-        .map_err(|e| format!("Failed to parse LLM response: {}", e))?;
+        .map_err(|e| format!("解析 LLM 响应失败：{}", e))?;
 
         info!("🐞 LLM Response received from Claude");
 
         let completion = chat_response
             .completion()
-            .ok_or("No text content in LLM response")?;
+            .ok_or("LLM 响应中没有文本内容")?;
         Ok(completion)
     } else {
         let chat_response = await_or_cancel(
@@ -482,7 +482,7 @@ pub(crate) async fn generate_summary(
             cancellation_token,
         )
         .await?
-        .map_err(|e| format!("Failed to parse LLM response: {}", e))?;
+        .map_err(|e| format!("解析 LLM 响应失败：{}", e))?;
 
         info!("🐞 LLM Response received from {}", provider_name(provider));
         chat_response.completion()
@@ -699,7 +699,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(result, Err("Summary generation was cancelled".to_string()));
+        assert_eq!(result, Err("纪要生成已取消".to_string()));
         assert!(!polled.get());
     }
 
@@ -783,7 +783,7 @@ mod tests {
                 .expect("generation should be awaited after releasing the retry body")
                 .expect("generation should finish after releasing the retry body")
         });
-        assert_eq!(result, Err("Summary generation was cancelled".to_string()));
+        assert_eq!(result, Err("纪要生成已取消".to_string()));
     }
 
     #[tokio::test]
@@ -863,7 +863,7 @@ mod tests {
 
         let result =
             completion.expect("generation should observe cancellation before retry body release");
-        assert_eq!(result, Err("Summary generation was cancelled".to_string()));
+        assert_eq!(result, Err("纪要生成已取消".to_string()));
     }
 
     #[tokio::test]

@@ -15,7 +15,7 @@ import {
 import { toast } from 'sonner';
 
 const TRANSCRIPTION_RUNTIME_START_ERROR_CODE = 'TRANSCRIPTION_RUNTIME_INITIALIZATION_FAILED';
-const TRANSCRIPTION_RUNTIME_USER_MESSAGE = 'Speech recognition could not initialize. Restart Morgan Meet. If the problem continues, repair or reinstall the app.';
+const TRANSCRIPTION_RUNTIME_USER_MESSAGE = '语音识别初始化失败，请重启 Morgan Meet。若问题仍然存在，请修复或重新安装应用。';
 
 const isTranscriptionRuntimeStartError = (error: unknown) =>
   String(error) === TRANSCRIPTION_RUNTIME_START_ERROR_CODE;
@@ -65,7 +65,7 @@ export function useRecordingStart(
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const seconds = String(now.getSeconds()).padStart(2, '0');
-    return `Meeting ${day}_${month}_${year}_${hours}_${minutes}_${seconds}`;
+    return `会议 ${day}_${month}_${year}_${hours}_${minutes}_${seconds}`;
   }, []);
 
   const getTranscriptionProvider = useCallback(async (): Promise<string> => {
@@ -130,17 +130,17 @@ export function useRecordingStart(
       if (!modelReady) {
         const isDownloading = await checkIfModelDownloading();
         if (isDownloading) {
-          toast.info('Model download in progress', {
-            description: 'Please wait for the transcription model to finish downloading before recording.',
+          toast.info('模型正在下载', {
+            description: '请等待转写模型下载完成后再开始录音。',
             duration: 5000,
           });
           Analytics.trackButtonClick('start_recording_blocked_downloading', 'home_page');
         } else {
-          toast.error('Transcription model not ready', {
-            description: 'Please download a transcription model before recording.',
+          toast.error('转写模型尚未就绪', {
+            description: '请先下载转写模型再开始录音。',
             duration: 5000,
           });
-          showModal?.('modelSelector', 'Transcription model setup required');
+          showModal?.('modelSelector', '需要先设置转写模型');
           Analytics.trackButtonClick('start_recording_blocked_missing', 'home_page');
         }
         setStatus(RecordingStatus.IDLE);
@@ -153,7 +153,7 @@ export function useRecordingStart(
       setMeetingTitle(randomTitle);
 
       // Set STARTING status before initiating backend recording
-      setStatus(RecordingStatus.STARTING, 'Initializing recording...');
+      setStatus(RecordingStatus.STARTING, '正在初始化录音…');
 
       // Start the actual backend recording
       console.log('Starting backend recording with meeting:', randomTitle);
@@ -182,7 +182,7 @@ export function useRecordingStart(
       // the running recording's state. The winning start is live, so reflect
       // RECORDING here — leaving STARTING latched would keep the Stop button
       // disabled forever, since it's gated on isStartingRecording.
-      if (errorMsg.includes('already in progress')) {
+      if (errorMsg.includes('录音已在进行中')) {
         console.warn('Start rejected because recording is already active - leaving live recording state untouched');
         setStatus(RecordingStatus.RECORDING);
         Analytics.trackButtonClick('start_recording_error', 'home_page');
@@ -191,7 +191,7 @@ export function useRecordingStart(
 
       const isRuntimeError = isTranscriptionRuntimeStartError(error);
       if (errorMsg.includes('Recording start timed out')) {
-        toast.error('Recording start timed out — please try again');
+        toast.error('录音启动超时，请重试');
       }
 
       setStatus(RecordingStatus.ERROR, isRuntimeError
@@ -222,17 +222,17 @@ export function useRecordingStart(
           if (!modelReady) {
             const isDownloading = await checkIfModelDownloading();
             if (isDownloading) {
-              toast.info('Model download in progress', {
-                description: 'Please wait for the transcription model to finish downloading before recording.',
+              toast.info('模型正在下载', {
+                description: '请等待转写模型下载完成后再开始录音。',
                 duration: 5000,
               });
               Analytics.trackButtonClick('start_recording_blocked_downloading', 'sidebar_auto');
             } else {
-              toast.error('Transcription model not ready', {
-                description: 'Please download a transcription model before recording.',
+              toast.error('转写模型尚未就绪', {
+                description: '请先下载转写模型再开始录音。',
                 duration: 5000,
               });
-              showModal?.('modelSelector', 'Transcription model setup required');
+              showModal?.('modelSelector', '需要先设置转写模型');
               Analytics.trackButtonClick('start_recording_blocked_missing', 'sidebar_auto');
             }
             setStatus(RecordingStatus.IDLE);
@@ -246,7 +246,7 @@ export function useRecordingStart(
             const generatedMeetingTitle = generateMeetingTitle();
 
             // Set STARTING status before initiating backend recording
-            setStatus(RecordingStatus.STARTING, 'Initializing recording...');
+            setStatus(RecordingStatus.STARTING, '正在初始化录音…');
 
             console.log('Auto-starting backend recording with meeting:', generatedMeetingTitle);
             const result = await recordingService.startRecordingWithDevices(
@@ -269,7 +269,7 @@ export function useRecordingStart(
           } catch (error) {
             console.error('Failed to auto-start recording:', error);
             const errorMsg = error instanceof Error ? error.message : String(error);
-            if (errorMsg.includes('already in progress')) {
+            if (errorMsg.includes('录音已在进行中')) {
               // Benign race — another start won and is live; skip ERROR/alert.
               setStatus(RecordingStatus.RECORDING);
             } else {
@@ -278,7 +278,7 @@ export function useRecordingStart(
                 ? TRANSCRIPTION_RUNTIME_USER_MESSAGE
                 : errorMsg);
               if (!isRuntimeError) {
-                alert(`Failed to start recording.\n\n${errorMsg}`);
+                alert(`启动录音失败。\n\n${errorMsg}`);
               }
             }
             Analytics.trackButtonClick('start_recording_error', 'sidebar_auto');
@@ -321,17 +321,17 @@ export function useRecordingStart(
       if (!modelReady) {
         const isDownloading = await checkIfModelDownloading();
         if (isDownloading) {
-          toast.info('Model download in progress', {
-            description: 'Please wait for the transcription model to finish downloading before recording.',
+          toast.info('模型正在下载', {
+            description: '请等待转写模型下载完成后再开始录音。',
             duration: 5000,
           });
           Analytics.trackButtonClick('start_recording_blocked_downloading', 'sidebar_direct');
         } else {
-          toast.error('Transcription model not ready', {
-            description: 'Please download a transcription model before recording.',
+          toast.error('转写模型尚未就绪', {
+            description: '请先下载转写模型再开始录音。',
             duration: 5000,
           });
-          showModal?.('modelSelector', 'Transcription model setup required');
+          showModal?.('modelSelector', '需要先设置转写模型');
           Analytics.trackButtonClick('start_recording_blocked_missing', 'sidebar_direct');
         }
         setStatus(RecordingStatus.IDLE);
@@ -344,7 +344,7 @@ export function useRecordingStart(
         const generatedMeetingTitle = generateMeetingTitle();
 
         // Set STARTING status before initiating backend recording
-        setStatus(RecordingStatus.STARTING, 'Initializing recording...');
+        setStatus(RecordingStatus.STARTING, '正在初始化录音…');
 
         console.log('Starting backend recording with meeting:', generatedMeetingTitle);
         const result = await recordingService.startRecordingWithDevices(
@@ -367,7 +367,7 @@ export function useRecordingStart(
       } catch (error) {
         console.error('Failed to start recording from sidebar:', error);
         const errorMsg = error instanceof Error ? error.message : String(error);
-        if (errorMsg.includes('already in progress')) {
+        if (errorMsg.includes('录音已在进行中')) {
           // Benign race — another start won and is live; skip ERROR/alert.
           setStatus(RecordingStatus.RECORDING);
         } else {
@@ -376,7 +376,7 @@ export function useRecordingStart(
             ? TRANSCRIPTION_RUNTIME_USER_MESSAGE
             : errorMsg);
           if (!isRuntimeError) {
-            alert(`Failed to start recording.\n\n${errorMsg}`);
+            alert(`启动录音失败。\n\n${errorMsg}`);
           }
         }
         Analytics.trackButtonClick('start_recording_error', 'sidebar_direct');

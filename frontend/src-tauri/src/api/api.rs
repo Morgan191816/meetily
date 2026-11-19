@@ -254,7 +254,7 @@ pub async fn api_search_transcripts<R: Runtime>(
         }
         Err(e) => {
             log_error!("Transcript search failed");
-            Err(format!("Failed to search transcripts: {}", e))
+            Err(format!("搜索逐字稿失败：{}", e))
         }
     }
 }
@@ -355,7 +355,7 @@ pub async fn api_save_model_config<R: Runtime>(
 
     log_info!("✅ Successfully saved model configuration to database");
     Ok(
-        serde_json::json!({ "status": "success", "message": "Model configuration saved successfully" }),
+        serde_json::json!({ "status": "success", "message": "模型配置已保存" }),
     )
 }
 
@@ -469,7 +469,7 @@ pub async fn api_save_transcript_config<R: Runtime>(
 
     log_info!("Successfully saved transcript configuration.");
     Ok(
-        serde_json::json!({ "status": "success", "message": "Transcript configuration saved successfully" }),
+        serde_json::json!({ "status": "success", "message": "转写配置已保存" }),
     )
 }
 
@@ -550,19 +550,19 @@ pub async fn api_delete_meeting<R: Runtime>(
             log_info!("Successfully deleted meeting {}", meeting_id);
             Ok(serde_json::json!({
                 "status": "success",
-                "message": "Meeting deleted successfully"
+                "message": "会议已删除"
             }))
         }
         Ok(false) => {
             log_warn!("Meeting not found or already deleted: {}", meeting_id);
             Err(format!(
-                "Meeting not found or could not be deleted: {}",
+                "未找到会议，或该会议无法删除：{}",
                 meeting_id
             ))
         }
         Err(e) => {
             log_error!("Error deleting meeting {}: {}", meeting_id, e);
-            Err(format!("Failed to delete meeting: {}", e))
+            Err(format!("删除会议失败：{}", e))
         }
     }
 }
@@ -589,11 +589,11 @@ pub async fn api_get_meeting<R: Runtime>(
         }
         Ok(None) => {
             log_warn!("Meeting not found: {}", meeting_id);
-            Err(format!("Meeting not found: {}", meeting_id))
+            Err(format!("未找到会议：{}", meeting_id))
         }
         Err(e) => {
             log_error!("Error retrieving meeting {}: {}", meeting_id, e);
-            Err(format!("Failed to retrieve meeting: {}", e))
+            Err(format!("获取会议失败：{}", e))
         }
     }
 }
@@ -622,11 +622,11 @@ pub async fn api_get_meeting_metadata<R: Runtime>(
         }
         Ok(None) => {
             log_warn!("Meeting not found: {}", meeting_id);
-            Err(format!("Meeting not found: {}", meeting_id))
+            Err(format!("未找到会议：{}", meeting_id))
         }
         Err(e) => {
             log_error!("Error retrieving meeting metadata {}: {}", meeting_id, e);
-            Err(format!("Failed to retrieve meeting metadata: {}", e))
+            Err(format!("获取会议元数据失败：{}", e))
         }
     }
 }
@@ -681,7 +681,7 @@ pub async fn api_get_meeting_transcripts<R: Runtime>(
         }
         Err(e) => {
             log_error!("Error retrieving transcripts for meeting {}: {}", meeting_id, e);
-            Err(format!("Failed to retrieve transcripts: {}", e))
+            Err(format!("获取逐字稿失败：{}", e))
         }
     }
 }
@@ -703,15 +703,15 @@ pub async fn api_save_meeting_title<R: Runtime>(
     match MeetingsRepository::update_meeting_title(pool, &meeting_id, &title).await {
         Ok(true) => {
             log_info!("Successfully saved meeting title");
-            Ok(serde_json::json!({"message": "Meeting title saved successfully"}))
+            Ok(serde_json::json!({"message": "会议标题已保存"}))
         }
         Ok(false) => {
             log_error!("No meeting found with id {}", meeting_id);
-            Err(format!("No meeting found with id {}", meeting_id))
+            Err(format!("未找到 id 为 {} 的会议", meeting_id))
         }
         Err(e) => {
             log_error!("Failed to update meeting {}", e);
-            Err(format!("Failed to update meeting: {}", e))
+            Err(format!("更新会议失败：{}", e))
         }
     }
 }
@@ -739,7 +739,7 @@ pub async fn api_save_transcript<R: Runtime>(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| {
             log_error!("Failed to parse transcript segments: {}", e);
-            format!("Invalid transcript data format: {}. Please check the data structure.", e)
+            format!("逐字稿数据格式无效：{}。请检查数据结构。", e)
         })?;
 
 
@@ -761,13 +761,13 @@ pub async fn api_save_transcript<R: Runtime>(
             );
             Ok(serde_json::json!({
                 "status": "success",
-                "message": "Transcript saved successfully",
+                "message": "逐字稿已保存",
                 "meeting_id": meeting_id
             }))
         }
         Err(e) => {
             log_error!("Transcript save failed");
-            Err(format!("Failed to save transcript: {}", e))
+            Err(format!("保存逐字稿失败：{}", e))
         }
     }
 }
@@ -801,7 +801,7 @@ pub async fn open_meeting_folder<R: Runtime>(
                 let path = std::path::Path::new(&folder_path);
                 if !path.exists() {
                     log_warn!("Meeting folder path does not exist; meeting_id={}", meeting_id);
-                    return Err(format!("Recording folder not found: {}", folder_path));
+                    return Err(format!("未找到录音文件夹：{}", folder_path));
                 }
 
                 // Open folder based on OS
@@ -810,7 +810,7 @@ pub async fn open_meeting_folder<R: Runtime>(
                     std::process::Command::new("open")
                         .arg(&folder_path)
                         .spawn()
-                        .map_err(|e| format!("Failed to open folder: {}", e))?;
+                        .map_err(|e| format!("打开文件夹失败：{}", e))?;
                 }
 
                 #[cfg(target_os = "windows")]
@@ -818,7 +818,7 @@ pub async fn open_meeting_folder<R: Runtime>(
                     std::process::Command::new("explorer")
                         .arg(&folder_path)
                         .spawn()
-                        .map_err(|e| format!("Failed to open folder: {}", e))?;
+                        .map_err(|e| format!("打开文件夹失败：{}", e))?;
                 }
 
                 #[cfg(target_os = "linux")]
@@ -826,14 +826,14 @@ pub async fn open_meeting_folder<R: Runtime>(
                     std::process::Command::new("xdg-open")
                         .arg(&folder_path)
                         .spawn()
-                        .map_err(|e| format!("Failed to open folder: {}", e))?;
+                        .map_err(|e| format!("打开文件夹失败：{}", e))?;
                 }
 
                 log_info!("Meeting folder opened; meeting_id={}", meeting_id);
                 Ok(())
             } else {
                 log_warn!("Meeting {} has no folder_path set", meeting_id);
-                Err("Recording folder path not available for this meeting".to_string())
+                Err("该会议没有可用的录音文件夹路径".to_string())
             }
         }
         None => {
@@ -873,7 +873,7 @@ pub async fn test_backend_connection<R: Runtime>(
                 "Backend connection failed; error_class={}",
                 reqwest_error_class(&e)
             );
-            Err(format!("Failed to connect to backend: {}", e))
+            Err(format!("连接后端失败：{}", e))
         }
     }
 }
@@ -890,7 +890,7 @@ pub async fn debug_backend_connection<R: Runtime>(app: AppHandle<R>) -> Result<S
         }
         Err(e) => {
             log_error!("Failed to resolve configured backend origin");
-            return Err(format!("Failed to get server URL: {}", e));
+            return Err(format!("获取服务器地址失败：{}", e));
         }
     };
 
@@ -966,31 +966,31 @@ pub async fn api_save_custom_openai_config<R: Runtime>(
 
     // Validate required fields
     if endpoint.trim().is_empty() {
-        return Err("Endpoint URL is required".to_string());
+        return Err("接口地址不能为空".to_string());
     }
     if model.trim().is_empty() {
-        return Err("Model name is required".to_string());
+        return Err("模型名称不能为空".to_string());
     }
 
     // Validate endpoint URL format
     if !endpoint.starts_with("http://") && !endpoint.starts_with("https://") {
-        return Err("Endpoint must start with http:// or https://".to_string());
+        return Err("接口地址必须以 http:// 或 https:// 开头".to_string());
     }
 
     // Validate optional numeric parameters
     if let Some(temp) = temperature {
         if !(0.0..=2.0).contains(&temp) {
-            return Err("Temperature must be between 0.0 and 2.0".to_string());
+            return Err("温度必须在 0.0 到 2.0 之间".to_string());
         }
     }
     if let Some(top) = top_p {
         if !(0.0..=1.0).contains(&top) {
-            return Err("Top P must be between 0.0 and 1.0".to_string());
+            return Err("Top P 必须在 0.0 到 1.0 之间".to_string());
         }
     }
     if let Some(tokens) = max_tokens {
         if tokens < 1 {
-            return Err("Max tokens must be at least 1".to_string());
+            return Err("最大 Token 数至少为 1".to_string());
         }
     }
 
@@ -1013,12 +1013,12 @@ pub async fn api_save_custom_openai_config<R: Runtime>(
             );
             Ok(serde_json::json!({
                 "status": "success",
-                "message": "Custom OpenAI configuration saved successfully"
+                "message": "自定义 OpenAI 配置已保存"
             }))
         }
         Err(e) => {
             log_error!("Failed to save custom OpenAI config");
-            Err(format!("Failed to save custom OpenAI configuration: {}", e))
+            Err(format!("保存自定义 OpenAI 配置失败：{}", e))
         }
     }
 }
@@ -1048,7 +1048,7 @@ pub async fn api_get_custom_openai_config<R: Runtime>(
         }
         Err(e) => {
             log_error!("❌ Failed to get custom OpenAI config: {}", e);
-            Err(format!("Failed to get custom OpenAI configuration: {}", e))
+            Err(format!("获取自定义 OpenAI 配置失败：{}", e))
         }
     }
 }
@@ -1070,7 +1070,7 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
     );
 
     if !endpoint.starts_with("http://") && !endpoint.starts_with("https://") {
-        return Err("Endpoint must start with http:// or https://".to_string());
+        return Err("接口地址必须以 http:// 或 https:// 开头".to_string());
     }
 
     let url = format!("{}/chat/completions", endpoint.trim_end_matches('/'));
@@ -1082,7 +1082,7 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
-        .map_err(|error| format!("Failed to create HTTP client: {}", error))?;
+        .map_err(|error| format!("创建 HTTP 客户端失败：{}", error))?;
     let mut request = client
         .post(&url)
         .header("Content-Type", "application/json")
@@ -1124,7 +1124,7 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
                         );
                         Ok(serde_json::json!({
                             "status": "success",
-                            "message": "Connection successful and response validated",
+                            "message": "连接成功，响应校验通过",
                             "http_status": status.as_u16()
                         }))
                     }
@@ -1134,7 +1134,7 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
                             endpoint_origin,
                             status
                         );
-                        Err("Endpoint is reachable but doesn't appear to be OpenAI-compatible. Response is missing 'choices' array or 'message.content' / 'message.reasoning_content' field.".to_string())
+                        Err("接口可访问，但响应不像 OpenAI 兼容格式：缺少 'choices' 数组或 'message.content' / 'message.reasoning_content' 字段。".to_string())
                     }
                     Err(error) => {
                         log_warn!(
@@ -1142,7 +1142,7 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
                             endpoint_origin,
                             status
                         );
-                        Err(format!("Endpoint is reachable but returned invalid JSON: {}. Response: {}", error, response_text))
+                        Err(format!("接口可访问，但返回的 JSON 无效：{}。响应：{}", error, response_text))
                     }
                 }
             } else {
@@ -1151,7 +1151,7 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
                     endpoint_origin,
                     status
                 );
-                Err(format!("Connection failed with status {}: {}", status, response_text))
+                Err(format!("连接失败，状态码 {}：{}", status, response_text))
             }
         }
         Err(error) => {
@@ -1161,11 +1161,11 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
                 reqwest_error_class(&error)
             );
             if error.is_timeout() {
-                Err("Connection timed out. Please check the endpoint URL.".to_string())
+                Err("连接超时，请检查接口地址。".to_string())
             } else if error.is_connect() {
-                Err("Could not connect to endpoint. Please verify the URL is correct and the server is running.".to_string())
+                Err("无法连接到接口，请确认地址正确且服务正在运行。".to_string())
             } else {
-                Err(format!("Connection failed: {}", error))
+                Err(format!("连接失败：{}", error))
             }
         }
     }

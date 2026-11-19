@@ -78,7 +78,7 @@ export const useSidebar = () => {
 };
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [currentMeeting, setCurrentMeeting] = useState<CurrentMeeting | null>({ id: 'intro-call', title: '+ New Call' });
+  const [currentMeeting, setCurrentMeeting] = useState<CurrentMeeting | null>({ id: 'intro-call', title: '+ 新会议' });
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [doodlePath, setDoodlePath] = useState<string | null>(null);
   const [doodleDate, setDoodleDate] = useState<string | null>(null);
@@ -144,7 +144,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const baseItems: SidebarItem[] = [
     {
       id: 'meetings',
-      title: 'Meeting Notes',
+      title: '会议记录',
       type: 'folder' as const,
       children: [
         ...meetings.map(meeting => ({ id: meeting.id, title: meeting.title, type: 'file' as const }))
@@ -160,7 +160,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   // Update current meeting when on home page
   useEffect(() => {
     if (pathname === '/') {
-      setCurrentMeeting({ id: 'intro-call', title: '+ New Call' });
+      setCurrentMeeting({ id: 'intro-call', title: '+ 新会议' });
     }
     setSidebarItems(baseItems);
   }, [pathname]);
@@ -246,7 +246,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
             start: processId,
             end: null,
             data: null,
-            error: 'Summary generation timed out after 15 minutes. Please try again or check your model configuration.',
+            error: '纪要生成超时（超过 15 分钟）。请重试或检查模型配置。',
           });
           if (summaryPollsRef.current.get(meetingId) === entry) {
             stopSummaryPolling(meetingId, processId);
@@ -283,7 +283,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
             start: processId,
             end: null,
             data: null,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: error instanceof Error ? error.message : '未知错误',
           });
         } catch (callbackError) {
           console.error('Failed to handle summary polling error:', callbackError);

@@ -38,15 +38,15 @@ impl Template {
     /// Validates the template structure
     pub fn validate(&self) -> Result<(), String> {
         if self.name.is_empty() {
-            return Err("Template name cannot be empty".to_string());
+            return Err("模板名称不能为空".to_string());
         }
 
         if self.description.is_empty() {
-            return Err("Template description cannot be empty".to_string());
+            return Err("模板描述不能为空".to_string());
         }
 
         if self.sections.is_empty() {
-            return Err("Template must have at least one section".to_string());
+            return Err("模板至少需要一个章节".to_string());
         }
 
         for (i, section) in self.sections.iter().enumerate() {

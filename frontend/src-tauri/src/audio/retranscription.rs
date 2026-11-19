@@ -32,7 +32,7 @@ impl RetranscriptionGuard {
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
         {
-            return Err("Retranscription already in progress".to_string());
+            return Err("重新转写已在进行中".to_string());
         }
         Ok(RetranscriptionGuard)
     }
@@ -164,7 +164,7 @@ fn find_audio_file(folder: &Path) -> Result<PathBuf> {
         }
     }
 
-    Err(anyhow!("No audio file found in: {}", folder.display()))
+    Err(anyhow!("未在以下位置找到音频文件：{}", folder.display()))
 }
 
 /// Internal function to run retranscription
@@ -185,11 +185,11 @@ async fn run_retranscription<R: Runtime>(
     );
 
     // Emit progress: decoding
-    emit_progress(&app, &meeting_id, "decoding", 5, "Decoding audio file...");
+    emit_progress(&app, &meeting_id, "decoding", 5, "正在解码音频文件…");
 
     // Check for cancellation
     if RETRANSCRIPTION_CANCELLED.load(Ordering::SeqCst) {
-        return Err(anyhow!("Retranscription cancelled"));
+        return Err(anyhow!("重新转写已取消"));
     }
 
     // Decode the audio file (CPU-intensive, run in blocking task)
@@ -206,11 +206,11 @@ async fn run_retranscription<R: Runtime>(
         duration_seconds, decoded.sample_rate, decoded.channels
     );
 
-    emit_progress(&app, &meeting_id, "decoding", 15, "Converting audio format...");
+    emit_progress(&app, &meeting_id, "decoding", 15, "正在转换音频格式…");
 
     // Check for cancellation
     if RETRANSCRIPTION_CANCELLED.load(Ordering::SeqCst) {
-        return Err(anyhow!("Retranscription cancelled"));
+        return Err(anyhow!("重新转写已取消"));
     }
 
     // Convert to 16kHz mono format (CPU-intensive, run in blocking task)
@@ -221,11 +221,11 @@ async fn run_retranscription<R: Runtime>(
     .map_err(|e| anyhow!("Resample task panicked: {}", e))?;
     info!("Converted to 16kHz mono format: {} samples", audio_samples.len());
 
-    emit_progress(&app, &meeting_id, "vad", 20, "Detecting speech segments...");
+    emit_progress(&app, &meeting_id, "vad", 20, "正在检测语音片段…");
 
     // Check for cancellation
     if RETRANSCRIPTION_CANCELLED.load(Ordering::SeqCst) {
-        return Err(anyhow!("Retranscription cancelled"));
+        return Err(anyhow!("重新转写已取消"));
     }
 
     // Use VAD to find natural speech boundaries (same approach as live transcription)
@@ -246,7 +246,7 @@ async fn run_retranscription<R: Runtime>(
                     &meeting_id_for_vad,
                     "vad",
                     overall_progress,
-                    &format!("Detecting speech segments... {}% ({} found)", vad_progress, segments_found),
+                    &format!("正在检测语音片段… {}%（已找到 {} 段）", vad_progress, segments_found),
                 );
 
                 // Return false to cancel if cancellation requested
@@ -289,10 +289,10 @@ async fn run_retranscription<R: Runtime>(
 
     if total_segments == 0 {
         warn!("No speech detected in audio");
-        return Err(anyhow!("No speech detected in audio file"));
+        return Err(anyhow!("音频文件中未检测到语音"));
     }
 
-    emit_progress(&app, &meeting_id, "transcribing", 25, "Loading transcription engine...");
+    emit_progress(&app, &meeting_id, "transcribing", 25, "正在加载转写引擎…");
 
     // Initialize the engine once (not per-segment)
     let whisper_engine = if total_segments > 0 {
@@ -333,7 +333,7 @@ async fn run_retranscription<R: Runtime>(
     for (i, segment) in processable_segments.iter().enumerate() {
         // Check for cancellation before each segment
         if RETRANSCRIPTION_CANCELLED.load(Ordering::SeqCst) {
-            return Err(anyhow!("Retranscription cancelled"));
+            return Err(anyhow!("重新转写已取消"));
         }
 
         // Calculate progress (25% to 80% range for transcription)
@@ -345,7 +345,7 @@ async fn run_retranscription<R: Runtime>(
             "transcribing",
             progress,
             &format!(
-                "Transcribing segment {} of {} ({:.1}s)...",
+                "正在转写第 {} / {} 段（{:.1} 秒）…",
                 i + 1,
                 processable_count,
                 segment_duration_sec
@@ -394,10 +394,10 @@ async fn run_retranscription<R: Runtime>(
 
     // Check for cancellation
     if RETRANSCRIPTION_CANCELLED.load(Ordering::SeqCst) {
-        return Err(anyhow!("Retranscription cancelled"));
+        return Err(anyhow!("重新转写已取消"));
     }
 
-    emit_progress(&app, &meeting_id, "saving", 80, "Saving transcripts...");
+    emit_progress(&app, &meeting_id, "saving", 80, "正在保存逐字稿…");
 
     // Create transcript segments with proper timestamps from VAD
     let segments = create_transcript_segments(&all_transcripts);
@@ -447,7 +447,7 @@ async fn run_retranscription<R: Runtime>(
     );
 
     // Write updated transcripts.json and metadata.json to the meeting folder
-    emit_progress(&app, &meeting_id, "saving", 90, "Writing transcript files...");
+    emit_progress(&app, &meeting_id, "saving", 90, "正在写入逐字稿文件…");
 
     if let Err(e) = write_transcripts_json(&folder_path, &segments) {
         warn!("Failed to write transcripts.json: {}", e);
@@ -469,7 +469,7 @@ async fn run_retranscription<R: Runtime>(
         warn!("Failed to update metadata.json: {}", e);
     }
 
-    emit_progress(&app, &meeting_id, "complete", 100, "Retranscription complete");
+    emit_progress(&app, &meeting_id, "complete", 100, "重新转写完成");
 
     Ok(RetranscriptionResult {
         meeting_id,
@@ -592,7 +592,7 @@ async fn get_configured_whisper_model<R: Runtime>(app: &AppHandle<R>) -> Result<
                 Ok(setting.model)
             } else {
                 error!("Retranscription requires Whisper provider, but configured provider is: {}", setting.provider);
-                Err(anyhow!("Retranscription requires Whisper. Current provider '{}' does not support retranscription with language selection.", setting.provider))
+                Err(anyhow!("重新转写需要 Whisper。当前提供方「{}」不支持带语言选择的重新转写。", setting.provider))
             }
         },
         None => {
@@ -671,7 +671,7 @@ pub async fn start_retranscription_command<R: Runtime>(
 
     // Check if retranscription is already in progress (guard will be acquired in start_retranscription)
     if RETRANSCRIPTION_IN_PROGRESS.load(Ordering::SeqCst) {
-        return Err("Retranscription already in progress".to_string());
+        return Err("重新转写已在进行中".to_string());
     }
 
     // Clone values for the spawned task
@@ -705,7 +705,7 @@ pub async fn start_retranscription_command<R: Runtime>(
 #[tauri::command]
 pub async fn cancel_retranscription_command() -> Result<(), String> {
     if !is_retranscription_in_progress() {
-        return Err("No retranscription in progress".to_string());
+        return Err("当前没有正在进行的重新转写".to_string());
     }
     cancel_retranscription();
     Ok(())
@@ -870,7 +870,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let result = find_audio_file(dir.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No audio file found"));
+        assert!(result.unwrap_err().to_string().contains("未在以下位置找到音频文件"));
     }
 
     #[test]

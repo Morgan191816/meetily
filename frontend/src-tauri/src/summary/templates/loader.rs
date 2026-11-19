@@ -127,7 +127,7 @@ pub fn get_template(template_id: &str) -> Result<Template, String> {
 /// Parsed and validated Template struct
 pub fn validate_and_parse_template(json_content: &str) -> Result<Template, String> {
     let template: Template = serde_json::from_str(json_content)
-        .map_err(|e| format!("Failed to parse template JSON: {}", e))?;
+        .map_err(|e| format!("解析模板 JSON 失败：{}", e))?;
 
     template.validate()?;
 

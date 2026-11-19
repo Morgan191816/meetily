@@ -128,7 +128,7 @@ pub async fn open_system_settings(preference_pane: String) -> Result<(), String>
     Command::new("open")
         .arg(&url)
         .spawn()
-        .map_err(|e| format!("Failed to open system settings: {}", e))?;
+        .map_err(|e| format!("打开系统设置失败：{}", e))?;
 
     Ok(())
 } 
