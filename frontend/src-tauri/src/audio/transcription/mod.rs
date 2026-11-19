@@ -7,6 +7,7 @@ pub mod whisper_provider;
 pub mod engine;
 pub mod worker;
 pub mod sensevoice;
+pub mod term_correction;
 
 // Re-export commonly used types
 pub use provider::{TranscriptionError, TranscriptionProvider, TranscriptResult};
