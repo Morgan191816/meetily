@@ -2,9 +2,9 @@ name: "CN Tests"
 
 on:
   push:
-    branches: [cn, phase2]
+    branches: [cn, phase2, phase3]
   pull_request:
-    branches: [cn, phase2]
+    branches: [cn, phase2, phase3]
   workflow_dispatch:
 
 permissions:
@@ -20,6 +20,12 @@ jobs:
         with:
           toolchain: 1.99.1
       - uses: Swatinem/rust-cache@v2
+      # sherpa-onnx build.rs 首次构建会从 GitHub Releases 拉 ~117MB 静态库，缓存到 target/ 下
+      - name: Cache sherpa-onnx prebuilt libs
+        uses: actions/cache@v4
+        with:
+          path: target/sherpa-onnx-prebuilt
+          key: sherpa-onnx-2.0.1-win-x64-static
       # test_get_output_device 需要真实音频输出设备，GitHub runner 上失败并让整个 lib 测试进程 AV 崩溃
       # runner 的 PATH 里另有一个 1.17.1 的 onnxruntime.dll，会让 ort(1.22.x) 初始化失败；
       # 把 build script 下载的 1.22 放到测试 exe 同目录，Windows 先搜应用目录再搜 PATH

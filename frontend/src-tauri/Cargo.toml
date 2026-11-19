@@ -152,6 +152,9 @@ tauri-plugin-dialog = "2.3.0"
 tauri-plugin-store = "2.4.0"
 tauri-plugin-notification = "2.3.1"
 
+# SenseVoice 离线识别；必须用默认 static 特性，shared 会带入第二个 onnxruntime.dll
+sherpa-onnx = "2.0.1"
+
 # Desktop-only single instance guard
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "=2.3.7"

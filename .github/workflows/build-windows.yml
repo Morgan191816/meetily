@@ -530,6 +530,13 @@ jobs:
           prefix-key: windows-portable-v1
           key: windows-x64-vulkan-v2
 
+      # sherpa-onnx build.rs 首次构建会从 GitHub Releases 拉 ~117MB 静态库，缓存到 target/ 下
+      - name: Cache sherpa-onnx prebuilt libs
+        uses: actions/cache@v4
+        with:
+          path: target/sherpa-onnx-prebuilt
+          key: sherpa-onnx-2.0.1-win-x64-static
+
       - name: Install Vulkan SDK
         uses: humbletim/install-vulkan-sdk@v1.2
         with:
