@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-static TERM_CORRECTOR: OnceLock<TermCorrector> = OnceLock::new();
+pub(crate) static TERM_CORRECTOR: OnceLock<TermCorrector> = OnceLock::new();
 
 pub struct TermCorrector {
     /// 别名（含正确写法自身）→ 正确写法，按字符数降序；同长时自身映射优先
