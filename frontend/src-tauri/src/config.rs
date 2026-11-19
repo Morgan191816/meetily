@@ -7,6 +7,12 @@
 /// This is the recommended balance of accuracy and speed.
 pub const DEFAULT_WHISPER_MODEL: &str = "large-v3-turbo";
 
+/// 默认转写提供方：SenseVoice（中文优先）。Whisper 保留为可选回退。
+pub const DEFAULT_TRANSCRIPTION_PROVIDER: &str = "senseVoice";
+
+/// SenseVoice 只有一份模型文件，provider 侧用它作为模型名。
+pub const DEFAULT_SENSEVOICE_MODEL: &str = "sense-voice-int8";
+
 /// Whisper model catalog with metadata for all supported models.
 /// Used by both WhisperEngine::discover_models() and discover_models_standalone().
 ///

@@ -6,10 +6,12 @@ import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { Eye, EyeOff, Lock, Unlock } from 'lucide-react';
 import { ModelManager } from './WhisperModelManager';
+import { SenseVoiceModelCard } from './SenseVoiceModelCard';
+import { DEFAULT_SENSEVOICE_MODEL, DEFAULT_WHISPER_MODEL } from '../constants/modelDefaults';
 
 
 export interface TranscriptModelProps {
-    provider: 'localWhisper' | 'deepgram' | 'elevenLabs' | 'groq' | 'openai';
+    provider: 'localWhisper' | 'senseVoice' | 'deepgram' | 'elevenLabs' | 'groq' | 'openai';
     model: string;
     apiKey?: string | null;
 }
@@ -33,7 +35,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     }, [transcriptModelConfig.provider]);
 
     useEffect(() => {
-        if (transcriptModelConfig.provider === 'localWhisper') {
+        if (transcriptModelConfig.provider === 'localWhisper' || transcriptModelConfig.provider === 'senseVoice') {
             setApiKey(null);
         }
     }, [transcriptModelConfig.provider]);
@@ -51,6 +53,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     };
     const modelOptions = {
         localWhisper: [], // Model selection handled by ModelManager component
+        senseVoice: [], // 单模型，模型卡片直接管理
         deepgram: ['nova-2-phonecall'],
         elevenLabs: ['eleven_multilingual_v2'],
         groq: ['llama-3.3-70b-versatile'],
@@ -62,6 +65,38 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
         if (isApiKeyLocked) {
             setIsLockButtonVibrating(true);
             setTimeout(() => setIsLockButtonVibrating(false), 500);
+        }
+    };
+
+    const saveTranscriptConfig = async (config: TranscriptModelProps) => {
+        setTranscriptModelConfig(config);
+        try {
+            await invoke('api_save_transcript_config', {
+                provider: config.provider,
+                model: config.model,
+                apiKey: null,
+            });
+        } catch (err) {
+            console.error('Failed to save transcript config:', err);
+        }
+    };
+
+    const handleProviderChange = (value: string) => {
+        const provider = value as TranscriptModelProps['provider'];
+        setUiProvider(provider);
+        if (provider === 'senseVoice') {
+            void saveTranscriptConfig({ ...transcriptModelConfig, provider, model: DEFAULT_SENSEVOICE_MODEL });
+        } else if (provider === 'localWhisper') {
+            void saveTranscriptConfig({
+                ...transcriptModelConfig,
+                provider,
+                // 之前选的是 SenseVoice 时，模型名不能沿用
+                model: transcriptModelConfig.provider === 'localWhisper' && transcriptModelConfig.model
+                    ? transcriptModelConfig.model
+                    : DEFAULT_WHISPER_MODEL,
+            });
+        } else {
+            fetchApiKey(provider);
         }
     };
 
@@ -93,19 +128,14 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                         <div className="flex space-x-2 mx-1">
                             <Select
                                 value={uiProvider}
-                                onValueChange={(value) => {
-                                    const provider = value as TranscriptModelProps['provider'];
-                                    setUiProvider(provider);
-                                    if (provider !== 'localWhisper') {
-                                        fetchApiKey(provider);
-                                    }
-                                }}
+                                onValueChange={handleProviderChange}
                             >
                                 <SelectTrigger className='focus:ring-1 focus:ring-blue-500 focus:border-blue-500'>
                                     <SelectValue placeholder="选择服务商" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="localWhisper">🏠 本地 Whisper（高精度）</SelectItem>
+                                    <SelectItem value="senseVoice">🏠 本地 SenseVoice（中文优先）</SelectItem>
+                                    <SelectItem value="localWhisper">🏠 本地 Whisper（多语言）</SelectItem>
                                     {/* <SelectItem value="deepgram">☁️ Deepgram (Backup)</SelectItem>
                                     <SelectItem value="elevenLabs">☁️ ElevenLabs</SelectItem>
                                     <SelectItem value="groq">☁️ Groq</SelectItem>
@@ -113,7 +143,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                                 </SelectContent>
                             </Select>
 
-                            {uiProvider !== 'localWhisper' && (
+                            {uiProvider !== 'localWhisper' && uiProvider !== 'senseVoice' && (
                                 <Select
                                     value={transcriptModelConfig.model}
                                     onValueChange={(value) => {
@@ -142,6 +172,12 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                                 onModelSelect={handleWhisperModelSelect}
                                 autoSave={true}
                             />
+                        </div>
+                    )}
+
+                    {uiProvider === 'senseVoice' && (
+                        <div className="mt-6">
+                            <SenseVoiceModelCard />
                         </div>
                     )}
 

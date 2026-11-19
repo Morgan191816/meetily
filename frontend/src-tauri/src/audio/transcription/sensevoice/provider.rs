@@ -43,6 +43,29 @@ impl SenseVoiceProvider {
             recognizer: Arc::new(Mutex::new(None)),
         }
     }
+
+    /// 预加载识别器（只创建，不解码）。供录音开始前调用，避免 228MB 加载发生在录音中途。
+    pub async fn ensure_loaded(&self) -> Result<(), TranscriptionError> {
+        // 与 transcribe 复用同一把锁，保证识别器只创建一次。
+        let mut guard = self.recognizer.lock().await;
+        if guard.is_some() {
+            return Ok(());
+        }
+        let dir = self.paths.as_ref().ok_or(TranscriptionError::ModelNotLoaded)?;
+        let config = super::build_recognizer_config(
+            &dir.join(super::model::MODEL_FILE),
+            &dir.join(super::model::TOKENS_FILE),
+            None,
+        );
+        let recognizer = tokio::task::spawn_blocking(move || {
+            sherpa_onnx::OfflineRecognizer::create(&config)
+        })
+        .await
+        .map_err(|e| TranscriptionError::EngineFailed(format!("识别任务失败：{e}")))?
+        .ok_or_else(|| TranscriptionError::EngineFailed("SenseVoice 识别器创建失败".into()))?;
+        *guard = Some(recognizer);
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -136,5 +159,12 @@ mod tests {
     fn reports_model_not_loaded_before_ensure() {
         let provider = SenseVoiceProvider::without_model();
         assert!(!futures::executor::block_on(provider.is_model_loaded()));
+    }
+
+    #[test]
+    fn ensure_loaded_without_model_reports_model_not_loaded() {
+        let provider = SenseVoiceProvider::without_model();
+        let err = futures::executor::block_on(provider.ensure_loaded()).unwrap_err();
+        assert!(matches!(err, TranscriptionError::ModelNotLoaded));
     }
 }

@@ -401,24 +401,29 @@ pub async fn api_get_transcript_config<R: Runtime>(
                 &config.provider,
                 &config.model
             );
-            match SettingsRepository::get_transcript_api_key(pool, &config.provider).await {
-                Ok(api_key) => {
-                    log_info!("Successfully retrieved transcript config and API key.");
-                    Ok(Some(TranscriptConfig {
-                        provider: config.provider,
-                        model: config.model,
-                        api_key,
-                    }))
+            // 本地模型没有 API 密钥；跳过查表，否则 senseVoice 会被当成非法 provider 报错，
+            // 上层只能回退到 Whisper。
+            let api_key = if config.provider == "senseVoice" {
+                None
+            } else {
+                match SettingsRepository::get_transcript_api_key(pool, &config.provider).await {
+                    Ok(api_key) => api_key,
+                    Err(e) => {
+                        log_error!(
+                            "Failed to get transcript API key for provider {}: {}",
+                            &config.provider,
+                            e
+                        );
+                        return Err(e.to_string());
+                    }
                 }
-                Err(e) => {
-                    log_error!(
-                        "Failed to get transcript API key for provider {}: {}",
-                        &config.provider,
-                        e
-                    );
-                    Err(e.to_string())
-                }
-            }
+            };
+            log_info!("Successfully retrieved transcript config and API key.");
+            Ok(Some(TranscriptConfig {
+                provider: config.provider,
+                model: config.model,
+                api_key,
+            }))
         }
         Ok(None) => {
             log_info!("No transcript config found, returning default.");
