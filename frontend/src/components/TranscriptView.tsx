@@ -297,6 +297,7 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({ transcripts, isR
                       {transcript.confidence !== undefined && (
                         <ConfidenceIndicator
                           confidence={transcript.confidence}
+                          estimated={transcript.confidenceEstimated}
                           showIndicator={showConfidence}
                         />
                       )}

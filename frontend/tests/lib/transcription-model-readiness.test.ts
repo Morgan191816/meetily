@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   getProviderCommands,
   hasDownloadingModel,
+  mapProviderToCommand,
 } from '../../src/lib/transcription-model-readiness';
 
 describe('transcription model readiness', () => {
@@ -17,6 +18,11 @@ describe('transcription model readiness', () => {
   test('does not silently treat an unsupported provider as supported', () => {
     expect(getProviderCommands('deepgram')).toBeNull();
     expect(getProviderCommands('parakeet')).toBeNull();
+  });
+
+  test('senseVoice 就绪检查走 sensevoice_get_status', () => {
+    const calls = mapProviderToCommand('senseVoice');
+    expect(calls).toEqual({ statusCommand: 'sensevoice_get_status', downloadCommand: 'sensevoice_download_model' });
   });
 
   test('recognizes only active downloads', () => {

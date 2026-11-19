@@ -3,7 +3,9 @@
 // TranscriptionEngine enum and model initialization/validation logic.
 
 use super::provider::TranscriptionProvider;
+use super::sensevoice::provider::SenseVoiceProvider;
 use log::{info, warn};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, Runtime};
 
@@ -44,6 +46,46 @@ impl TranscriptionEngine {
 }
 
 // ============================================================================
+// PROVIDER DISPATCH
+// ============================================================================
+
+#[derive(Debug)]
+pub(crate) enum EngineKind {
+    Whisper,
+    Provider,
+}
+
+fn unsupported_provider_error(provider: &str) -> String {
+    format!("不支持的转写提供方「{provider}」，请选择「本地 SenseVoice」或「本地 Whisper」。")
+}
+
+/// provider 字符串 → 引擎类型。未知 provider 一律报错，不再静默回退 Whisper。
+pub(crate) fn engine_kind_for_provider(provider: &str) -> Result<EngineKind, String> {
+    match provider {
+        "localWhisper" => Ok(EngineKind::Whisper),
+        "senseVoice" => Ok(EngineKind::Provider),
+        other => Err(unsupported_provider_error(other)),
+    }
+}
+
+fn sensevoice_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
+    let data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("获取应用数据目录失败：{e}"))?;
+    Ok(crate::audio::transcription::sensevoice::model::sensevoice_model_dir(&data))
+}
+
+pub(crate) fn validate_sense_voice_ready(dir: &Path) -> Result<(), String> {
+    let status = crate::audio::transcription::sensevoice::model::inspect_model_dir(dir);
+    if status.state == "available" {
+        Ok(())
+    } else {
+        Err("尚未下载 SenseVoice 模型，请在「设置 → 转写」中点击「下载模型」。".to_string())
+    }
+}
+
+// ============================================================================
 // MODEL VALIDATION AND INITIALIZATION
 // ============================================================================
 
@@ -65,10 +107,11 @@ pub async fn validate_transcription_model_ready<R: Runtime>(app: &AppHandle<R>) 
             config
         }
         Ok(None) => {
-            info!("📝 No transcript config found, defaulting to localWhisper");
+            // api_get_transcript_config 现在总是返回 Some；保留此分支仅为防御，且与 api.rs 的默认保持一致。
+            info!("📝 No transcript config found, defaulting to SenseVoice");
             crate::api::api::TranscriptConfig {
-                provider: "localWhisper".to_string(),
-                model: crate::config::DEFAULT_WHISPER_MODEL.to_string(),
+                provider: crate::config::DEFAULT_TRANSCRIPTION_PROVIDER.to_string(),
+                model: crate::config::DEFAULT_SENSEVOICE_MODEL.to_string(),
                 api_key: None,
             }
         }
@@ -107,12 +150,13 @@ pub async fn validate_transcription_model_ready<R: Runtime>(app: &AppHandle<R>) 
                 }
             }
         }
+        "senseVoice" => {
+            info!("🔍 Validating SenseVoice model...");
+            validate_sense_voice_ready(&sensevoice_dir(app)?)
+        }
         other => {
             warn!("❌ Unsupported transcription provider for local recording: {}", other);
-            Err(format!(
-                "提供方「{}」不支持本地转写，请选择「localWhisper」。",
-                other
-            ))
+            Err(unsupported_provider_error(other))
         }
     }
 }
@@ -137,10 +181,11 @@ pub async fn get_or_init_transcription_engine<R: Runtime>(
             config
         }
         Ok(None) => {
-            info!("📝 No transcript config found, defaulting to localWhisper");
+            // api_get_transcript_config 现在总是返回 Some；保留此分支仅为防御，且与 api.rs 的默认保持一致。
+            info!("📝 No transcript config found, defaulting to SenseVoice");
             crate::api::api::TranscriptConfig {
-                provider: "localWhisper".to_string(),
-                model: crate::config::DEFAULT_WHISPER_MODEL.to_string(),
+                provider: crate::config::DEFAULT_TRANSCRIPTION_PROVIDER.to_string(),
+                model: crate::config::DEFAULT_SENSEVOICE_MODEL.to_string(),
                 api_key: None,
             }
         }
@@ -155,17 +200,26 @@ pub async fn get_or_init_transcription_engine<R: Runtime>(
     };
 
     // Initialize the appropriate engine based on provider
-    match config.provider.as_str() {
-        "localWhisper" => {
+    match engine_kind_for_provider(&config.provider)? {
+        EngineKind::Whisper => {
             info!("🎤 Initializing Whisper transcription engine");
             let whisper_engine = get_or_init_whisper(app).await?;
             Ok(TranscriptionEngine::Whisper(whisper_engine))
         }
-        other => {
-            // Only legacy values ("parakeet"/"whisper") should reach here after normalization.
-            warn!("Provider '{}' is not supported; falling back to localWhisper", other);
-            let whisper_engine = get_or_init_whisper(app).await?;
-            Ok(TranscriptionEngine::Whisper(whisper_engine))
+        EngineKind::Provider => {
+            info!("🎤 Initializing SenseVoice transcription engine");
+            // 模型缺失时在创建 provider 前就报可操作的错误，而不是等到 ensure_loaded 后
+            // 变成「SenseVoice 识别器创建失败」。
+            let dir = sensevoice_dir(app)?;
+            validate_sense_voice_ready(&dir)?;
+            let provider = Arc::new(SenseVoiceProvider::new(dir));
+            // worker 在 transcribe 前会检查 is_model_loaded()；懒加载 provider 必须在这里预加载，
+            // 否则每段音频都会被判 ModelNotLoaded，整场得到空逐字稿。
+            provider
+                .ensure_loaded()
+                .await
+                .map_err(|e| format!("SenseVoice 模型加载失败：{e}"))?;
+            Ok(TranscriptionEngine::Provider(provider))
         }
     }
 }
@@ -390,4 +444,37 @@ pub async fn get_or_init_whisper<R: Runtime>(
     }
 
     Ok(engine)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sense_voice_without_model_returns_actionable_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let err = validate_sense_voice_ready(tmp.path()).unwrap_err();
+        assert!(
+            err.contains("尚未下载 SenseVoice 模型"),
+            "错误必须告诉用户去哪下载，实际：{err}"
+        );
+    }
+
+    #[test]
+    fn unknown_provider_is_rejected_not_silently_fallback() {
+        let err = engine_kind_for_provider("someUnknownProvider").unwrap_err();
+        assert!(err.contains("不支持的转写提供方"), "实际：{err}");
+    }
+
+    #[test]
+    fn known_providers_map_to_expected_engine_kind() {
+        assert!(matches!(
+            engine_kind_for_provider("senseVoice"),
+            Ok(EngineKind::Provider)
+        ));
+        assert!(matches!(
+            engine_kind_for_provider("localWhisper"),
+            Ok(EngineKind::Whisper)
+        ));
+    }
 }

@@ -10,6 +10,11 @@
 export const DEFAULT_WHISPER_MODEL = 'large-v3-turbo';
 
 /**
+ * SenseVoice 只有一份模型文件，provider 侧用它作为模型名。
+ */
+export const DEFAULT_SENSEVOICE_MODEL = 'sense-voice-int8';
+
+/**
  * Model defaults by provider type
  */
 export const MODEL_DEFAULTS = {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { RefreshCw, Globe, Loader2, AlertCircle, CheckCircle2, X, Cpu } from 'lucide-react';
 import {
   Dialog,
@@ -22,7 +22,6 @@ import { toast } from 'sonner';
 import { useConfig } from '@/contexts/ConfigContext';
 import { LANGUAGES } from '@/constants/languages';
 import { languageDisplayName } from '@/lib/language';
-import { useTranscriptionModels, ModelOption } from '@/hooks/useTranscriptionModels';
 import Analytics from '@/lib/analytics';
 
 interface RetranscribeDialogProps {
@@ -65,16 +64,6 @@ export function RetranscribeDialog({
   const [error, setError] = useState<string | null>(null);
   const [selectedLang, setSelectedLang] = useState(selectedLanguage || 'auto');
 
-  // Use centralized model fetching hook
-  const {
-    availableModels,
-    selectedModelKey,
-    setSelectedModelKey,
-    loadingModels,
-    fetchModels,
-    resetSelection,
-  } = useTranscriptionModels(transcriptModelConfig);
-
   // Stable refs for callbacks to avoid listener re-registration
   const onCompleteRef = useRef(onComplete);
   const onOpenChangeRef = useRef(onOpenChange);
@@ -84,16 +73,6 @@ export function RetranscribeDialog({
   // Track previous open state to only reset on closed→open transition
   const prevOpenRef = useRef(false);
 
-  // Helper to get selected model details (memoized)
-  const selectedModelDetails = useMemo((): ModelOption | undefined => {
-    if (!selectedModelKey) return undefined;
-    const colonIndex = selectedModelKey.indexOf(':');
-    if (colonIndex === -1) return undefined;
-    const provider = selectedModelKey.slice(0, colonIndex);
-    const name = selectedModelKey.slice(colonIndex + 1);
-    return availableModels.find(m => m.provider === provider && m.name === name);
-  }, [selectedModelKey, availableModels]);
-
   // Reset state only when dialog transitions from closed to open
   // This prevents re-initialization when config changes while dialog is already open
   useEffect(() => {
@@ -101,16 +80,12 @@ export function RetranscribeDialog({
     prevOpenRef.current = open;
 
     if (open && !wasOpen) {
-      resetSelection();
       setIsProcessing(false);
       setProgress(null);
       setError(null);
       setSelectedLang(selectedLanguage || 'auto');
-
-      // Fetch available models using centralized hook
-      fetchModels();
     }
-  }, [open, selectedLanguage, transcriptModelConfig, fetchModels]);
+  }, [open, selectedLanguage]);
 
   // Listen for retranscription events
   useEffect(() => {
@@ -204,16 +179,15 @@ export function RetranscribeDialog({
       const languageToSend = selectedLang === 'auto' ? null : selectedLang;
       await Analytics.track('enhance_transcript_started', {
         language: selectedLang === 'auto' ? 'auto' : selectedLang,
-        model_provider: selectedModelDetails?.provider || '',
-        model_name: selectedModelDetails?.name || ''
+        model_provider: transcriptModelConfig?.provider || '',
+        model_name: transcriptModelConfig?.model || ''
       });
 
+      // 后端按「设置 → 转写」中的配置分派引擎，不再接收调用方选择的模型。
       await invoke('start_retranscription_command', {
         meetingId,
         meetingFolderPath,
         language: languageToSend,
-        model: selectedModelDetails?.name || null,
-        provider: selectedModelDetails?.provider || null,
       });
     } catch (err: any) {
       setIsProcessing(false);
@@ -318,27 +292,10 @@ export function RetranscribeDialog({
             </div>
           )}
 
-          {!isProcessing && !error && availableModels.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Cpu className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">模型</span>
-              </div>
-              <Select value={selectedModelKey} onValueChange={setSelectedModelKey} disabled={loadingModels}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={loadingModels ? "正在加载模型…" : "选择模型"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableModels.map((model) => (
-                    <SelectItem key={`${model.provider}:${model.name}`} value={`${model.provider}:${model.name}`}>
-                      {model.displayName} ({Math.round(model.size_mb)} MB)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                选择用于转写的模型
-              </p>
+          {!isProcessing && !error && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Cpu className="h-4 w-4" />
+              <span>转写模型由「设置 → 转写」决定</span>
             </div>
           )}
 

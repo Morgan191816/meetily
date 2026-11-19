@@ -26,13 +26,21 @@ pub struct SettingsRepository;
 
 /// Map a stored provider/model to a supported one. Old installs may still have
 /// `parakeet` or the legacy `whisper` value saved; those engines were removed or
-/// renamed, so fall back to local Whisper.
+/// renamed, so fall back to local Whisper. A missing provider means "never chosen",
+/// which now defaults to SenseVoice.
 fn normalize_transcript_provider(provider: &str, model: &str) -> crate::api::api::TranscriptConfig {
     if provider == "parakeet" || provider == "whisper" {
         log::warn!("provider '{}' is not supported; falling back to localWhisper", provider);
         return crate::api::api::TranscriptConfig {
             provider: "localWhisper".to_string(),
             model: crate::config::DEFAULT_WHISPER_MODEL.to_string(),
+            api_key: None,
+        };
+    }
+    if provider.trim().is_empty() {
+        return crate::api::api::TranscriptConfig {
+            provider: crate::config::DEFAULT_TRANSCRIPTION_PROVIDER.to_string(),
+            model: crate::config::DEFAULT_SENSEVOICE_MODEL.to_string(),
             api_key: None,
         };
     }

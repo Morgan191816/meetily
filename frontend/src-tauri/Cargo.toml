@@ -110,6 +110,7 @@ tokio-util = "0.7"  # Utilities for tokio including CancellationToken
 async-trait = "0.1"  # Trait abstraction for async methods
 
 reqwest = { version = "0.11", features = ["blocking", "multipart", "json", "stream"] }
+sha2 = "0.10"  # SenseVoice 模型下载校验
 
 # crossbeam
 crossbeam = "0.8.4"
@@ -151,6 +152,12 @@ tauri-plugin-fs = "2.4.0"
 tauri-plugin-dialog = "2.3.0"
 tauri-plugin-store = "2.4.0"
 tauri-plugin-notification = "2.3.1"
+
+# SenseVoice 离线识别；必须用默认 static 特性，shared 会带入第二个 onnxruntime.dll
+# 本地构建需先设 SHERPA_ONNX_LIB_DIR 指向 static-MD 解压目录（build.rs 默认下载的 /MT 包与 whisper-rs 的 /MD 冲突，链接期 LNK2038）：
+#   mkdir -p sherpa-onnx-libs && curl -sSL https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-v2.0.1-win-x64-static-MD-Release-lib.tar.bz2 | tar xj -C sherpa-onnx-libs --strip-components=1
+#   export SHERPA_ONNX_LIB_DIR="$PWD/sherpa-onnx-libs/lib"
+sherpa-onnx = "2.0.1"
 
 # Desktop-only single instance guard
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]

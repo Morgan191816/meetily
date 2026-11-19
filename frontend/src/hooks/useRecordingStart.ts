@@ -10,6 +10,7 @@ import { showRecordingNotification } from '@/lib/recordingNotification';
 import {
   getProviderCommands,
   hasDownloadingModel,
+  mapProviderToCommand,
   type ModelWithStatus,
 } from '@/lib/transcription-model-readiness';
 import { toast } from 'sonner';
@@ -82,8 +83,14 @@ export function useRecordingStart(
   const checkTranscriptionModelReady = useCallback(async (): Promise<boolean> => {
     try {
       const provider = await getTranscriptionProvider();
-      const commands = getProviderCommands(provider);
+      const statusCommands = mapProviderToCommand(provider);
 
+      if (statusCommands) {
+        const status = await invoke<{ state: string }>(statusCommands.statusCommand);
+        return status.state === 'available';
+      }
+
+      const commands = getProviderCommands(provider);
       if (commands) {
         await invoke(commands.initialize);
         return await invoke<boolean>(commands.hasAvailableModels);
@@ -101,6 +108,12 @@ export function useRecordingStart(
   const checkIfModelDownloading = useCallback(async (): Promise<boolean> => {
     try {
       const provider = await getTranscriptionProvider();
+      const statusCommands = mapProviderToCommand(provider);
+      if (statusCommands) {
+        const status = await invoke<{ state: string }>(statusCommands.statusCommand);
+        return status.state === 'downloading';
+      }
+
       const commands = getProviderCommands(provider);
       if (!commands) return false;
 

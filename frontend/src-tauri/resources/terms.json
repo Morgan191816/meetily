@@ -1,0 +1,445 @@
+{
+  "品牌": {
+    "格兰斯贝": {
+      "correct": "格兰斯贝",
+      "aliases": [
+        "格兰仕",
+        "格拉斯贝",
+        "格兰斯",
+        "格拉斯",
+        "格兰斯贝"
+      ],
+      "context": [
+        "品牌",
+        "照明",
+        "控制"
+      ],
+      "web_verifiable": true,
+      "note": "照明控制系统品牌"
+    },
+    "东软载波": {
+      "correct": "东软载波",
+      "aliases": [
+        "东冉在播",
+        "东软人",
+        "东软",
+        "东冉",
+        "东软载波"
+      ],
+      "context": [
+        "公司",
+        "PLC",
+        "综合能源",
+        "青岛"
+      ],
+      "web_verifiable": true,
+      "note": "青岛东软载波科技，PLC通信技术公司"
+    },
+    "华为": {
+      "correct": "华为",
+      "aliases": [
+        "华卫",
+        "化卫"
+      ],
+      "context": [
+        "公司",
+        "通信"
+      ],
+      "web_verifiable": true
+    },
+    "小米": {
+      "correct": "小米",
+      "aliases": [
+        "小蜜"
+      ],
+      "context": [
+        "公司",
+        "智能家居"
+      ],
+      "web_verifiable": true
+    },
+    "博联": {
+      "correct": "博联",
+      "aliases": [
+        "博联",
+        "伯联"
+      ],
+      "context": [
+        "公司",
+        "物联网"
+      ],
+      "web_verifiable": true
+    },
+    "海康": {
+      "correct": "海康威视",
+      "aliases": [
+        "海康",
+        "海康卫视",
+        "海康威视"
+      ],
+      "context": [
+        "公司",
+        "安防",
+        "摄像头"
+      ],
+      "web_verifiable": true
+    },
+    "大华": {
+      "correct": "大华",
+      "aliases": [
+        "大华"
+      ],
+      "context": [
+        "公司",
+        "安防",
+        "摄像头"
+      ],
+      "web_verifiable": true
+    },
+    "江森": {
+      "correct": "江森自控",
+      "aliases": [
+        "江森",
+        "江森自控",
+        "江森霍尼"
+      ],
+      "context": [
+        "公司",
+        "楼宇自控"
+      ],
+      "web_verifiable": true,
+      "note": "常与霍尼韦尔混淆"
+    },
+    "霍尼韦尔": {
+      "correct": "霍尼韦尔",
+      "aliases": [
+        "霍尼",
+        "霍尼韦尔",
+        "江森霍尼"
+      ],
+      "context": [
+        "公司",
+        "楼宇自控"
+      ],
+      "web_verifiable": true
+    },
+    "西门子": {
+      "correct": "西门子",
+      "aliases": [
+        "西门子"
+      ],
+      "context": [
+        "公司",
+        "楼宇自控"
+      ],
+      "web_verifiable": true
+    }
+  },
+  "技术名词": {
+    "PLC": {
+      "correct": "PLC",
+      "aliases": [
+        "PRC",
+        "plc",
+        "P L C",
+        "电力线载波"
+      ],
+      "context": [
+        "通信",
+        "控制",
+        "协议"
+      ],
+      "web_verifiable": true,
+      "note": "电力线载波通信（Power Line Communication），语音转写常误为PRC"
+    },
+    "蓝牙": {
+      "correct": "蓝牙",
+      "aliases": [
+        "蓝牙",
+        "蓝芽",
+        "Bluetooth"
+      ],
+      "context": [
+        "通信",
+        "无线"
+      ],
+      "web_verifiable": true
+    },
+    "鸿蒙": {
+      "correct": "鸿蒙",
+      "aliases": [
+        "红盟",
+        "洪盟",
+        "红名"
+      ],
+      "context": [
+        "系统",
+        "华为"
+      ],
+      "web_verifiable": true
+    },
+    "Mesh": {
+      "correct": "Mesh",
+      "aliases": [
+        "麦什",
+        "梅什",
+        "mesh",
+        "MESH"
+      ],
+      "context": [
+        "通信",
+        "组网"
+      ],
+      "web_verifiable": false
+    },
+    "MQTT": {
+      "correct": "MQTT",
+      "aliases": [
+        "MQTT",
+        "mqtt",
+        "M Q T T"
+      ],
+      "context": [
+        "通信",
+        "协议",
+        "物联网"
+      ],
+      "web_verifiable": true
+    },
+    "Modbus": {
+      "correct": "Modbus",
+      "aliases": [
+        "Modbus",
+        "modbus",
+        "MODBUS"
+      ],
+      "context": [
+        "通信",
+        "协议",
+        "工业"
+      ],
+      "web_verifiable": true
+    },
+    "EMC": {
+      "correct": "EMC",
+      "aliases": [
+        "EMC",
+        "合同能源管理"
+      ],
+      "context": [
+        "商业模式",
+        "节能",
+        "能源管理"
+      ],
+      "web_verifiable": true,
+      "note": "合同能源管理（Energy Management Contract），非电磁兼容"
+    },
+    "API": {
+      "correct": "API",
+      "aliases": [
+        "API",
+        "api"
+      ],
+      "context": [
+        "技术",
+        "对接"
+      ],
+      "web_verifiable": false
+    },
+    "SaaS": {
+      "correct": "SaaS",
+      "aliases": [
+        "SaaS",
+        "saas",
+        "S A A S"
+      ],
+      "context": [
+        "技术",
+        "平台",
+        "软件"
+      ],
+      "web_verifiable": false
+    },
+    "PaaS": {
+      "correct": "PaaS",
+      "aliases": [
+        "PaaS",
+        "paas",
+        "P A A S"
+      ],
+      "context": [
+        "技术",
+        "平台",
+        "软件"
+      ],
+      "web_verifiable": false
+    },
+    "HPLC": {
+      "correct": "HPLC",
+      "aliases": [
+        "HPLC",
+        "hplc",
+        "高速PLC"
+      ],
+      "context": [
+        "通信",
+        "电力线载波"
+      ],
+      "web_verifiable": true,
+      "note": "高速电力线载波通信"
+    },
+    "数字孪生": {
+      "correct": "数字孪生",
+      "aliases": [
+        "数字孪生",
+        "数字双生"
+      ],
+      "context": [
+        "技术",
+        "可视化"
+      ],
+      "web_verifiable": true
+    },
+    "逆变器": {
+      "correct": "逆变器",
+      "aliases": [
+        "逆变器",
+        "逆电器",
+        "逆变气"
+      ],
+      "context": [
+        "技术",
+        "光伏",
+        "储能"
+      ],
+      "web_verifiable": true
+    },
+    "微电网": {
+      "correct": "微电网",
+      "aliases": [
+        "微电网",
+        "微网"
+      ],
+      "context": [
+        "能源",
+        "电力"
+      ],
+      "web_verifiable": true
+    },
+    "虚拟电厂": {
+      "correct": "虚拟电厂",
+      "aliases": [
+        "虚拟电厂",
+        "虚电厂"
+      ],
+      "context": [
+        "能源",
+        "电力"
+      ],
+      "web_verifiable": true
+    },
+    "源网荷储": {
+      "correct": "源网荷储",
+      "aliases": [
+        "源网荷储",
+        "源网合储",
+        "源网和储"
+      ],
+      "context": [
+        "能源",
+        "一体化"
+      ],
+      "web_verifiable": true
+    },
+    "削峰填谷": {
+      "correct": "削峰填谷",
+      "aliases": [
+        "削峰填谷",
+        "消峰填谷"
+      ],
+      "context": [
+        "能源",
+        "储能"
+      ],
+      "web_verifiable": false
+    },
+    "光储充": {
+      "correct": "光储充",
+      "aliases": [
+        "光储充",
+        "光储冲",
+        "光伏储能充电"
+      ],
+      "context": [
+        "能源",
+        "新能源"
+      ],
+      "web_verifiable": true
+    }
+  },
+  "产品名": {
+    "单灯控制器": {
+      "correct": "单灯控制器",
+      "aliases": [
+        "单灯控器",
+        "单灯控制"
+      ],
+      "context": [
+        "产品",
+        "照明"
+      ],
+      "web_verifiable": false
+    },
+    "空调伴侣": {
+      "correct": "空调伴侣",
+      "aliases": [
+        "空凋伴侣",
+        "空调帮手"
+      ],
+      "context": [
+        "产品",
+        "空调"
+      ],
+      "web_verifiable": true
+    },
+    "温控器": {
+      "correct": "温控器",
+      "aliases": [
+        "温控器",
+        "温控气",
+        "温度控制器"
+      ],
+      "context": [
+        "产品",
+        "空调",
+        "暖通"
+      ],
+      "web_verifiable": false
+    },
+    "储能柜": {
+      "correct": "储能柜",
+      "aliases": [
+        "储能柜",
+        "储能贵",
+        "储电柜"
+      ],
+      "context": [
+        "产品",
+        "储能"
+      ],
+      "web_verifiable": true
+    },
+    "充电桩": {
+      "correct": "充电桩",
+      "aliases": [
+        "充电桩",
+        "充电庄"
+      ],
+      "context": [
+        "产品",
+        "新能源"
+      ],
+      "web_verifiable": true
+    }
+  }
+}

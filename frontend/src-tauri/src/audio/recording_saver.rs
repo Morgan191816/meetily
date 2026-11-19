@@ -20,7 +20,11 @@ pub struct TranscriptSegment {
     pub audio_end_time: f64,   // Seconds from recording start
     pub duration: f64,          // Segment duration in seconds
     pub display_time: String,   // Formatted time for display like "[02:15]"
-    pub confidence: f32,
+    /// None 表示没有真实分数（SenseVoice），不伪造 0。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<f32>,
+    #[serde(default)]
+    pub confidence_estimated: bool,
     pub sequence_id: u64,
 }
 
@@ -125,7 +129,8 @@ impl RecordingSaver {
             audio_end_time: 0.0,
             duration: 0.0,
             display_time: "[00:00]".to_string(),
-            confidence: 1.0,
+            confidence: None,
+            confidence_estimated: false,
             sequence_id: 0,
         };
         self.add_transcript_segment(segment);

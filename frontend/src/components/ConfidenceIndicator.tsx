@@ -1,16 +1,18 @@
 'use client';
 
 interface ConfidenceIndicatorProps {
-  confidence: number;
+  confidence?: number;
+  estimated?: boolean;
   showIndicator?: boolean;
 }
 
 export const ConfidenceIndicator: React.FC<ConfidenceIndicatorProps> = ({
   confidence,
+  estimated = false,
   showIndicator = true,
 }) => {
-  // Don't render if preference is disabled
-  if (!showIndicator) {
+  // Don't render if preference is disabled or there is no real score
+  if (!showIndicator || confidence === undefined) {
     return null;
   }
 
@@ -32,13 +34,15 @@ export const ConfidenceIndicator: React.FC<ConfidenceIndicatorProps> = ({
 
   const confidencePercent = (confidence * 100).toFixed(0);
   const colorClass = getColorClass(confidence);
-  const label = getConfidenceLabel(confidence);
+  const title = estimated
+    ? `置信度 ${confidencePercent}%（估算）`
+    : `置信度 ${confidencePercent}% - ${getConfidenceLabel(confidence)}`;
 
   return (
     <div
       className="flex items-center gap-1"
-      title={`置信度 ${confidencePercent}% - ${label}`}
-      aria-label={`转写置信度：${confidencePercent}%`}
+      title={title}
+      aria-label={`转写置信度：${confidencePercent}%${estimated ? '（估算）' : ''}`}
     >
       <div
         className={`w-2 h-2 rounded-full ${colorClass} transition-colors duration-200`}

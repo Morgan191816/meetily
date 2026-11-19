@@ -167,7 +167,12 @@ pub struct TranscriptUpdate {
     pub sequence_id: u64,
     pub chunk_start_time: f64, // Legacy field, kept for compatibility
     pub is_partial: bool,
-    pub confidence: f32,
+    /// None 表示 provider 没有真实分数（SenseVoice），JSON 中省略该字段。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<f32>,
+    /// 置信度是否为估算值（Whisper 按文本长度推算）。
+    #[serde(rename = "confidenceEstimated", default)]
+    pub confidence_estimated: bool,
     // NEW: Recording-relative timestamps for playback sync
     pub audio_start_time: f64, // Seconds from recording start (e.g., 125.3)
     pub audio_end_time: f64,   // Seconds from recording start (e.g., 128.6)
@@ -240,6 +245,12 @@ pub fn start_transcription_task<R: Runtime>(
                     } else {
                         match transcribe_chunk_with_provider(&engine_clone, chunk, &app_clone).await {
                             Ok((transcript, confidence_opt, is_partial)) => {
+                                // 术语纠正必须早于 should_emit_transcript 与 transcript-update 事件
+                                let transcript = super::term_correction::TERM_CORRECTOR
+                                    .get()
+                                    .map(|corrector| corrector.correct(&transcript))
+                                    .unwrap_or(transcript);
+
                                 if let Some(confidence) = confidence_opt {
                                     stats.confidence_total += confidence as f64;
                                     stats.confidence_count += 1;
@@ -275,7 +286,9 @@ pub fn start_transcription_task<R: Runtime>(
                                         sequence_id,
                                         chunk_start_time: chunk_timestamp,
                                         is_partial,
-                                        confidence: confidence_opt.unwrap_or(0.85),
+                                        confidence: confidence_opt,
+                                        // 只有 Whisper 返回置信度，且它是按文本长度估算的。
+                                        confidence_estimated: confidence_opt.is_some(),
                                         audio_start_time: chunk_timestamp,
                                         audio_end_time: chunk_timestamp + chunk_duration,
                                         duration: chunk_duration,

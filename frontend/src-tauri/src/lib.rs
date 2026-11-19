@@ -679,6 +679,14 @@ pub fn run() {
             })
             .expect("Failed to initialize database");
 
+            // 术语表：用户覆盖（%APPDATA%/com.morgan.meet/terms.json）优先，其次打包资源，都失败用空表
+            audio::transcription::term_correction::init(
+                _app.path().app_data_dir().ok().map(|dir| dir.join("terms.json")),
+                _app.path()
+                    .resolve("resources/terms.json", tauri::path::BaseDirectory::Resource)
+                    .ok(),
+            );
+
             // Initialize bundled templates directory for dynamic template discovery
             log::info!("Initializing bundled templates directory...");
             if let Ok(resource_path) = _app.handle().path().resource_dir() {
@@ -888,6 +896,11 @@ pub fn run() {
             // System settings commands
             #[cfg(target_os = "macos")]
             utils::open_system_settings,
+            // SenseVoice model management
+            audio::transcription::sensevoice::commands::sensevoice_get_status,
+            audio::transcription::sensevoice::commands::sensevoice_download_model,
+            audio::transcription::sensevoice::commands::sensevoice_cancel_download,
+            audio::transcription::sensevoice::commands::sensevoice_delete_model,
             // Retranscription commands
             audio::retranscription::start_retranscription_command,
             audio::retranscription::cancel_retranscription_command,

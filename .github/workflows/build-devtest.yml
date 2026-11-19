@@ -122,6 +122,10 @@ jobs:
           prefix-key: ${{ runner.os == 'Windows' && 'windows-portable-v1' || 'v0-rust' }}
           key: ${{ matrix.platform }}-${{ matrix.target }}
 
+      # Windows-only: sherpa-onnx 静态库必须用 static-MD 包（/MT 与 whisper-rs 的 /MD 冲突）
+      - uses: ./.github/actions/setup-sherpa-onnx
+        if: contains(matrix.platform, 'windows')
+
       # Platform-specific dependencies
       - name: Install dependencies (Ubuntu 24.04)
         if: matrix.platform == 'ubuntu-24.04'

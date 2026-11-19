@@ -334,3 +334,28 @@ export class WhisperAPI {
     await invoke('open_models_folder');
   }
 }
+
+export interface SenseVoiceModelStatus {
+  state: 'missing' | 'downloading' | 'available' | 'corrupted';
+  progress: number | null;
+  path: string;
+}
+
+// SenseVoice 只有单个模型，命令不带参数
+export class SenseVoiceAPI {
+  static async getStatus(): Promise<SenseVoiceModelStatus> {
+    return await invoke('sensevoice_get_status');
+  }
+
+  static async downloadModel(): Promise<void> {
+    await invoke('sensevoice_download_model');
+  }
+
+  static async cancelDownload(): Promise<void> {
+    await invoke('sensevoice_cancel_download');
+  }
+
+  static async deleteModel(): Promise<void> {
+    await invoke('sensevoice_delete_model');
+  }
+}

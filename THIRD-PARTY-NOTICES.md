@@ -17,10 +17,24 @@ or its upstream distribution.
 | FFmpeg (`binaries/ffmpeg`) | LGPL-2.1+ or GPL-2.0-or-later, depending on the build | Redistributed as a bundled binary; the applicable license text and source code access must be provided with any distributed build |
 | BlockNote (`@blocknote/*`) | MPL-2.0 | Used unmodified |
 | ONNX Runtime (`ort`) | MIT | Required by the Silero VAD runtime; bundled with the application |
+| sherpa-onnx | Apache-2.0 | SenseVoice offline speech recognition runtime (statically linked) |
+| SenseVoice model weights (FunAudioLLM) | FunASR Model Open Source License Agreement v1.1 | Downloaded on first use; files come from the official sherpa-onnx conversion |
 
 Other Rust and JavaScript dependencies, with their resolved versions, are listed in
 `Cargo.lock` and `frontend/pnpm-lock.yaml`. Each dependency remains under its own
 upstream license.
+
+## sherpa-onnx
+
+- License: Apache-2.0
+- Use: runtime for SenseVoice offline speech recognition
+- Project: https://github.com/k2-fsa/sherpa-onnx
+
+## SenseVoice model weights
+
+- License: FunASR Model Open Source License Agreement v1.1
+- Model name: SenseVoice (FunAudioLLM); the distributed files come from the official sherpa-onnx conversion
+- Attribution: the model name and this license notice must be retained in any redistribution
 
 ## FFmpeg redistribution
 
