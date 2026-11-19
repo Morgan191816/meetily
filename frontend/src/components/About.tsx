@@ -29,6 +29,9 @@ export function About() {
                 <p className="text-medium text-gray-600 mt-1">
                     本地会议转写与纪要工具
                 </p>
+                <p className="text-xs text-gray-500 mt-1">
+                    语音识别模型：SenseVoice（FunAudioLLM）
+                </p>
             </div>
 
             {/* Features Grid - Compact */}
