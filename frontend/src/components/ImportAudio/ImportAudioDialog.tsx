@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Upload,
   Globe,
@@ -37,7 +37,6 @@ import { useRouter } from 'next/navigation';
 import { useSidebar } from '../Sidebar/SidebarProvider';
 import { LANGUAGES } from '@/constants/languages';
 import { languageDisplayName } from '@/lib/language';
-import { useTranscriptionModels, ModelOption } from '@/hooks/useTranscriptionModels';
 
 
 interface ImportAudioDialogProps {
@@ -85,16 +84,6 @@ export function ImportAudioDialog({
   // (e.g. drag-drop path), we still need the initialization effect to run.
   const prevOpenRef = useRef(false);
 
-  // Use centralized model fetching hook
-  const {
-    availableModels,
-    selectedModelKey,
-    setSelectedModelKey,
-    loadingModels,
-    fetchModels,
-    resetSelection,
-  } = useTranscriptionModels(transcriptModelConfig);
-
   const handleImportComplete = useCallback((result: ImportResult) => {
     toast.success(`导入完成！已生成 ${result.segments_count} 个片段。`);
 
@@ -135,7 +124,6 @@ export function ImportAudioDialog({
     // Only initialize when transitioning from closed (false) to open (true)
     if (open && !wasOpen) {
       reset();
-      resetSelection();
       setTitle('');
       setTitleModifiedByUser(false);
       setSelectedLang(selectedLanguage || 'auto');
@@ -149,11 +137,8 @@ export function ImportAudioDialog({
           }
         });
       }
-
-      // Fetch available models using centralized hook
-      fetchModels();
     }
-  }, [open, preselectedFile, selectedLanguage, transcriptModelConfig, reset, resetSelection, validateFile, fetchModels]);
+  }, [open, preselectedFile, selectedLanguage, reset, validateFile]);
 
   // Update title when fileInfo changes
   useEffect(() => {
@@ -161,15 +146,6 @@ export function ImportAudioDialog({
       setTitle(fileInfo.filename);
     }
   }, [fileInfo, title, titleModifiedByUser]);
-
-  const selectedModel = useMemo((): ModelOption | undefined => {
-    if (!selectedModelKey) return undefined;
-    const colonIndex = selectedModelKey.indexOf(':');
-    if (colonIndex === -1) return undefined;
-    const provider = selectedModelKey.slice(0, colonIndex);
-    const name = selectedModelKey.slice(colonIndex + 1);
-    return availableModels.find((m) => m.provider === provider && m.name === name);
-  }, [selectedModelKey, availableModels]);
 
   const handleSelectFile = async () => {
     const info = await selectFile();
@@ -181,12 +157,13 @@ export function ImportAudioDialog({
   const handleStartImport = async () => {
     if (!fileInfo) return;
 
+    // 模型由「设置 → 转写」决定；这里只把当前配置传给分析事件，invoke 不再携带 UI 选择。
     await startImport(
       fileInfo.path,
       title || fileInfo.filename,
       selectedLang === 'auto' ? null : selectedLang,
-      selectedModel?.name || null,
-      selectedModel?.provider || null
+      transcriptModelConfig?.model || null,
+      transcriptModelConfig?.provider || null
     );
   };
 
@@ -356,34 +333,11 @@ export function ImportAudioDialog({
                         </Select>
                       </div>
 
-                      {/* Model selector */}
-                      {availableModels.length > 0 && (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <Cpu className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-medium">模型</span>
-                          </div>
-                          <Select
-                            value={selectedModelKey}
-                            onValueChange={setSelectedModelKey}
-                            disabled={loadingModels}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder={loadingModels ? '正在加载模型…' : '选择模型'} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableModels.map((model) => (
-                                <SelectItem
-                                  key={`${model.provider}:${model.name}`}
-                                  value={`${model.provider}:${model.name}`}
-                                >
-                                  {model.displayName} ({Math.round(model.size_mb)} MB)
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
+                      {/* 模型不可在此选择：批量转写按「设置 → 转写」中的配置分派 */}
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Cpu className="h-4 w-4" />
+                        <span>转写模型由「设置 → 转写」决定</span>
+                      </div>
                     </div>
                   )}
                 </div>

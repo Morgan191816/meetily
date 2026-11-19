@@ -226,12 +226,11 @@ export function useImportAudio({
           });
         }
 
+        // 后端按「设置 → 转写」中的配置分派引擎，不再接收调用方选择的模型。
         await invoke('start_import_audio_command', {
           sourcePath,
           title,
           language: language || null,
-          model: model || null,
-          provider: provider || null,
         });
       } catch (err: any) {
         setStatus('error');

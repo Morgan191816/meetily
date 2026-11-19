@@ -200,15 +200,19 @@ pub async fn get_or_init_transcription_engine<R: Runtime>(
     };
 
     // Initialize the appropriate engine based on provider
-    match config.provider.as_str() {
-        "localWhisper" => {
+    match engine_kind_for_provider(&config.provider)? {
+        EngineKind::Whisper => {
             info!("🎤 Initializing Whisper transcription engine");
             let whisper_engine = get_or_init_whisper(app).await?;
             Ok(TranscriptionEngine::Whisper(whisper_engine))
         }
-        "senseVoice" => {
+        EngineKind::Provider => {
             info!("🎤 Initializing SenseVoice transcription engine");
-            let provider = Arc::new(SenseVoiceProvider::new(sensevoice_dir(app)?));
+            // 模型缺失时在创建 provider 前就报可操作的错误，而不是等到 ensure_loaded 后
+            // 变成「SenseVoice 识别器创建失败」。
+            let dir = sensevoice_dir(app)?;
+            validate_sense_voice_ready(&dir)?;
+            let provider = Arc::new(SenseVoiceProvider::new(dir));
             // worker 在 transcribe 前会检查 is_model_loaded()；懒加载 provider 必须在这里预加载，
             // 否则每段音频都会被判 ModelNotLoaded，整场得到空逐字稿。
             provider
@@ -216,11 +220,6 @@ pub async fn get_or_init_transcription_engine<R: Runtime>(
                 .await
                 .map_err(|e| format!("SenseVoice 模型加载失败：{e}"))?;
             Ok(TranscriptionEngine::Provider(provider))
-        }
-        other => {
-            // 未知 provider 必须报错：静默回退 Whisper 会造成「校验报错但引擎仍用 Whisper」的分裂。
-            warn!("Provider '{}' is not supported", other);
-            Err(unsupported_provider_error(other))
         }
     }
 }

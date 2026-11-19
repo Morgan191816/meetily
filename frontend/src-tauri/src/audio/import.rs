@@ -323,7 +323,7 @@ async fn run_import<R: Runtime>(
     }
 
     info!(
-        "Starting import for '{}' from {} with language {:?}, model {:?}, provider {:?}",
+        "Starting import for '{}' from {} with language {:?}（忽略调用方传入的 model={:?} / provider={:?}，使用「设置 → 转写」中的配置）",
         title, source_path, language, model, provider
     );
 

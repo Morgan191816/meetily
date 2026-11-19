@@ -180,7 +180,7 @@ async fn run_retranscription<R: Runtime>(
     let audio_path = find_audio_file(&folder_path)?;
 
     info!(
-        "Starting retranscription for meeting {} with language {:?}, model {:?}, provider {:?}",
+        "Starting retranscription for meeting {} with language {:?}（忽略调用方传入的 model={:?} / provider={:?}，使用「设置 → 转写」中的配置）",
         meeting_id, language, model, provider
     );
 
