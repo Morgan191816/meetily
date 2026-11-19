@@ -46,12 +46,12 @@ pub fn default_output_device() -> Result<AudioDevice> {
             Ok(Some(sink)) => sink,
             Ok(None) => {
                 return Err(anyhow!(
-                    "PulseAudio/PipeWire reports no default output with a monitor source"
+                    "PulseAudio/PipeWire 未报告带监听源的默认输出设备"
                 ))
             }
             Err(e) => {
                 return Err(anyhow!(
-                    "System audio is unavailable. Ensure PulseAudio or PipeWire’s PulseAudio compatibility service is running. ({})",
+                    "系统声音不可用。请确认 PulseAudio 或 PipeWire 的 PulseAudio 兼容服务正在运行。（{}）",
                     e
                 ))
             }

@@ -17,7 +17,7 @@ pub struct DatabaseCheckResult {
 pub async fn check_first_launch(app: AppHandle) -> Result<bool, String> {
     DatabaseManager::is_first_launch(&app)
         .await
-        .map_err(|e| format!("Failed to check first launch: {}", e))
+        .map_err(|e| format!("检查首次启动状态失败：{}", e))
 }
 
 /// Open a dialog to select a folder or file for legacy database import
@@ -88,7 +88,7 @@ pub async fn check_default_legacy_database(app: AppHandle) -> Result<Option<Stri
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+        .map_err(|e| format!("获取应用数据目录失败：{}", e))?;
 
     let legacy_db = app_data_dir.join("meeting_minutes.db");
     info!("Checking for default legacy database at: {:?}", legacy_db);
@@ -157,7 +157,7 @@ pub async fn import_and_initialize_database(
         .await
         .map_err(|e| {
             error!("Failed to import legacy database: {}", e);
-            format!("Failed to import database: {}", e)
+            format!("导入数据库失败：{}", e)
         })?;
 
     // Update app state with the new manager
@@ -167,7 +167,7 @@ pub async fn import_and_initialize_database(
 
     // Emit event to notify frontend that database is ready
     app.emit("database-initialized", ())
-        .map_err(|e| format!("Failed to emit database-initialized event: {}", e))?;
+        .map_err(|e| format!("发送数据库初始化事件失败：{}", e))?;
 
     Ok(())
 }
@@ -181,7 +181,7 @@ pub async fn initialize_fresh_database(app: AppHandle) -> Result<(), String> {
         .await
         .map_err(|e| {
             error!("Failed to initialize fresh database: {}", e);
-            format!("Failed to initialize database: {}", e)
+            format!("初始化数据库失败：{}", e)
         })?;
 
     // Update app state with the new manager
@@ -215,7 +215,7 @@ pub async fn initialize_fresh_database(app: AppHandle) -> Result<(), String> {
 
     // Emit event to notify frontend that database is ready
     app.emit("database-initialized", ())
-        .map_err(|e| format!("Failed to emit database-initialized event: {}", e))?;
+        .map_err(|e| format!("发送数据库初始化事件失败：{}", e))?;
 
     Ok(())
 }
@@ -226,7 +226,7 @@ pub async fn get_database_directory(app: AppHandle) -> Result<String, String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+        .map_err(|e| format!("获取应用数据目录失败：{}", e))?;
 
     Ok(app_data_dir.to_string_lossy().to_string())
 }
@@ -237,12 +237,12 @@ pub async fn open_database_folder(app: AppHandle) -> Result<(), String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+        .map_err(|e| format!("获取应用数据目录失败：{}", e))?;
 
     // Ensure directory exists before trying to open it
     if !app_data_dir.exists() {
         std::fs::create_dir_all(&app_data_dir)
-            .map_err(|e| format!("Failed to create directory: {}", e))?;
+            .map_err(|e| format!("创建目录失败：{}", e))?;
     }
 
     let folder_path = app_data_dir.to_string_lossy().to_string();
@@ -252,7 +252,7 @@ pub async fn open_database_folder(app: AppHandle) -> Result<(), String> {
         std::process::Command::new("explorer")
             .arg(&folder_path)
             .spawn()
-            .map_err(|e| format!("Failed to open folder: {}", e))?;
+            .map_err(|e| format!("打开文件夹失败：{}", e))?;
     }
 
     #[cfg(target_os = "macos")]
@@ -260,7 +260,7 @@ pub async fn open_database_folder(app: AppHandle) -> Result<(), String> {
         std::process::Command::new("open")
             .arg(&folder_path)
             .spawn()
-            .map_err(|e| format!("Failed to open folder: {}", e))?;
+            .map_err(|e| format!("打开文件夹失败：{}", e))?;
     }
 
     #[cfg(target_os = "linux")]
@@ -268,7 +268,7 @@ pub async fn open_database_folder(app: AppHandle) -> Result<(), String> {
         std::process::Command::new("xdg-open")
             .arg(&folder_path)
             .spawn()
-            .map_err(|e| format!("Failed to open folder: {}", e))?;
+            .map_err(|e| format!("打开文件夹失败：{}", e))?;
     }
 
     info!("Opened database folder: {}", folder_path);

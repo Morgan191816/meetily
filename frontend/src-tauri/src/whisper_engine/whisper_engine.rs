@@ -122,7 +122,7 @@ impl WhisperEngine {
         } else {
             // Fallback: determine based on debug/release mode
             let current_dir = std::env::current_dir()
-                .map_err(|e| anyhow!("Failed to get current directory: {}", e))?;
+                .map_err(|e| anyhow!("无法获取当前目录：{}", e))?;
 
             // Development: Use frontend/models or backend directories
             // Production: Use system directories (should be overridden by caller)
@@ -145,7 +145,7 @@ impl WhisperEngine {
                 log::warn!("WhisperEngine: No models directory provided, using fallback path");
                 dirs::data_dir()
                     .or_else(|| dirs::home_dir())
-                    .ok_or_else(|| anyhow!("Could not find system data directory"))?
+                    .ok_or_else(|| anyhow!("无法找到系统数据目录"))?
                     // Kept as-is to avoid orphaning existing model/template data; rename in a migration.
                     .join("Meetily")
                     .join("models")
@@ -287,7 +287,7 @@ impl WhisperEngine {
     pub async fn load_model(&self, model_name: &str) -> Result<()> {
         let models = self.available_models.read().await;
         let model_info = models.get(model_name)
-            .ok_or_else(|| anyhow!("Model {} not found", model_name))?;
+            .ok_or_else(|| anyhow!("未找到模型 {}", model_name))?;
 
         match model_info.status {
             ModelStatus::Available => {
@@ -337,7 +337,7 @@ impl WhisperEngine {
 
                     // Load whisper context with hardware-optimized parameters
                     WhisperContext::new_with_params(&model_info.path.to_string_lossy(), context_param)
-                        .map_err(|e| anyhow!("Failed to load model {}: {}", model_name, e))?
+                        .map_err(|e| anyhow!("模型 {} 加载失败：{}", model_name, e))?
                     // Suppressor dropped here, stderr restored
                 };
 
@@ -354,16 +354,16 @@ impl WhisperEngine {
                 Ok(())
             },
             ModelStatus::Missing => {
-                Err(anyhow!("Model {} is not downloaded", model_name))
+                Err(anyhow!("模型 {} 尚未下载", model_name))
             },
             ModelStatus::Downloading { .. } => {
-                Err(anyhow!("Model {} is currently downloading", model_name))
+                Err(anyhow!("模型 {} 正在下载中", model_name))
             },
             ModelStatus::Error(ref err) => {
-                Err(anyhow!("Model {} has error: {}", model_name, err))
+                Err(anyhow!("模型 {} 出现错误：{}", model_name, err))
             },
             ModelStatus::Corrupted { .. } => {
-                Err(anyhow!("Model {} is corrupted and cannot be loaded", model_name))
+                Err(anyhow!("模型 {} 已损坏，无法加载", model_name))
             }
         }
     }
@@ -546,7 +546,7 @@ impl WhisperEngine {
     pub async fn transcribe_audio_with_confidence(&self, audio_data: Vec<f32>, language: Option<String>) -> Result<(String, f32, bool)> {
         let ctx_lock = self.current_context.read().await;
         let ctx = ctx_lock.as_ref()
-            .ok_or_else(|| anyhow!("No model loaded. Please load a model first."))?;
+            .ok_or_else(|| anyhow!("尚未加载模型，请先加载模型。"))?;
 
         // Get adaptive configuration based on hardware
         let hardware_profile = crate::audio::HardwareProfile::detect();
@@ -668,7 +668,7 @@ impl WhisperEngine {
         let ctx_lock = self.current_context.read().await;
         let ctx = ctx_lock
             .as_ref()
-            .ok_or_else(|| anyhow!("No model loaded. Please load a model first."))?;
+            .ok_or_else(|| anyhow!("尚未加载模型，请先加载模型。"))?;
         let hardware_profile = crate::audio::HardwareProfile::detect();
         let adaptive_config = hardware_profile.get_whisper_config();
         let mut params = FullParams::new(SamplingStrategy::BeamSearch {
@@ -730,19 +730,19 @@ impl WhisperEngine {
         use tokio::io::AsyncReadExt;
 
         let mut file = fs::File::open(model_path).await
-            .map_err(|e| anyhow!("Failed to open model file: {}", e))?;
+            .map_err(|e| anyhow!("无法打开模型文件：{}", e))?;
 
         // Read the first 8 bytes to check for GGML magic number
         let mut buffer = [0u8; 8];
         file.read_exact(&mut buffer).await
-            .map_err(|e| anyhow!("Failed to read model file header: {}", e))?;
+            .map_err(|e| anyhow!("无法读取模型文件头：{}", e))?;
 
         // Check for GGML magic number (various versions and endianness)
         if buffer.starts_with(b"ggml") || buffer.starts_with(b"GGUF") || buffer.starts_with(b"ggmf") ||
            buffer.starts_with(b"lmgg") || buffer.starts_with(b"FUGU") || buffer.starts_with(b"fmgg") {
             Ok(())
         } else {
-            Err(anyhow!("Invalid model file: missing GGML/GGUF magic number. Found: {:?}",
+            Err(anyhow!("模型文件无效：缺少 GGML/GGUF 文件标识。实际内容：{:?}",
                        String::from_utf8_lossy(&buffer[..4])))
         }
     }
@@ -756,7 +756,7 @@ impl WhisperEngine {
             models.get(model_name).cloned()
         };
 
-        let model_info = model_info.ok_or_else(|| anyhow!("Model '{}' not found", model_name))?;
+        let model_info = model_info.ok_or_else(|| anyhow!("未找到模型「{}」", model_name))?;
 
         // Check if model is corrupted before allowing deletion
         log::info!("Model '{}' has status: {:?}", model_name, model_info.status);
@@ -768,7 +768,7 @@ impl WhisperEngine {
                 // Delete the file
                 if model_info.path.exists() {
                     fs::remove_file(&model_info.path).await
-                        .map_err(|e| anyhow!("Failed to delete file '{}': {}", model_info.path.display(), e))?;
+                        .map_err(|e| anyhow!("删除文件「{}」失败：{}", model_info.path.display(), e))?;
                     log::info!("Successfully deleted corrupted file: {}", model_info.path.display());
                 } else {
                     log::warn!("File '{}' does not exist, nothing to delete", model_info.path.display());
@@ -790,7 +790,7 @@ impl WhisperEngine {
 
                 if model_info.path.exists() {
                     fs::remove_file(&model_info.path).await
-                        .map_err(|e| anyhow!("Failed to delete file '{}': {}", model_info.path.display(), e))?;
+                        .map_err(|e| anyhow!("删除文件「{}」失败：{}", model_info.path.display(), e))?;
                     log::info!("Successfully deleted available model file: {}", model_info.path.display());
                 } else {
                     log::warn!("File '{}' does not exist, nothing to delete", model_info.path.display());
@@ -807,7 +807,7 @@ impl WhisperEngine {
                 Ok(format!("Successfully deleted model '{}'", model_name))
             }
             _ => {
-                Err(anyhow!("Can only delete corrupted or available models. Model '{}' has status: {:?}", model_name, model_info.status))
+                Err(anyhow!("只能删除已损坏或可用的模型。模型「{}」当前状态：{:?}", model_name, model_info.status))
             }
         }
     }
@@ -815,7 +815,7 @@ impl WhisperEngine {
     async fn reserve_active_download(&self, model_name: &str) -> Result<Arc<ActiveDownload>> {
         let mut active_downloads = self.active_downloads.lock().await;
         if active_downloads.contains_key(model_name) {
-            return Err(anyhow!("Download already in progress for model: {}", model_name));
+            return Err(anyhow!("模型正在下载中：{}", model_name));
         }
 
         let (completion, _) = watch::channel(false);
@@ -861,17 +861,17 @@ impl WhisperEngine {
                     Some(expected_min_size) => match fs::metadata(file_path).await {
                         Ok(metadata) if metadata.len() >= expected_min_size => Ok(()),
                         Ok(metadata) => Err(anyhow!(
-                            "Downloaded model file is too small: {} bytes (expected at least {} bytes)",
+                            "下载的模型文件过小：{} 字节（至少应为 {} 字节）",
                             metadata.len(),
                             expected_min_size
                         )),
                         Err(e) => Err(anyhow!(
-                            "Failed to read downloaded model file metadata: {}",
+                            "无法读取已下载模型文件的元数据：{}",
                             e
                         )),
                     },
                     None => Err(anyhow!(
-                        "Unsupported model for download validation: {}",
+                        "无法校验该模型的下载结果：{}",
                         model_name
                     )),
                 };
@@ -969,7 +969,7 @@ impl WhisperEngine {
             "medium-q5_0" => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium-q5_0.bin",
             "large-v3-turbo-q5_0" => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
             "large-v3-q5_0" => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin",
-            _ => return Err(anyhow!("Unsupported model: {}", model_name)),
+            _ => return Err(anyhow!("不支持的模型：{}", model_name)),
         };
 
         self.download_model_from_url(model_name, model_url, progress_callback).await
@@ -1013,7 +1013,7 @@ impl WhisperEngine {
         if !self.models_dir.exists() {
             fs::create_dir_all(&self.models_dir)
                 .await
-                .map_err(|e| anyhow!("Failed to create models directory: {}", e))?;
+                .map_err(|e| anyhow!("创建模型目录失败：{}", e))?;
         }
 
         {
@@ -1026,22 +1026,22 @@ impl WhisperEngine {
         let client = Client::builder()
             .user_agent(concat!("MorganMeet/", env!("CARGO_PKG_VERSION")))
             .build()
-            .map_err(|e| anyhow!("Failed to create download client: {}", e))?;
+            .map_err(|e| anyhow!("创建下载客户端失败：{}", e))?;
         let response = tokio::select! {
             biased;
             _ = active_download.cancellation.cancelled() => return Err(DownloadCancelled.into()),
             response = client.get(model_url).send() => response
-                .map_err(|e| anyhow!("Failed to start download: {}", e))?,
+                .map_err(|e| anyhow!("启动下载失败：{}", e))?,
         };
 
         if !response.status().is_success() {
-            return Err(anyhow!("Download failed with status: {}", response.status()));
+            return Err(anyhow!("下载失败，状态码：{}", response.status()));
         }
 
         let total_size = response.content_length().unwrap_or(0);
         let mut file = fs::File::create(file_path)
             .await
-            .map_err(|e| anyhow!("Failed to create file: {}", e))?;
+            .map_err(|e| anyhow!("创建文件失败：{}", e))?;
 
         use futures_util::StreamExt;
         let mut stream = response.bytes_stream();
@@ -1068,10 +1068,10 @@ impl WhisperEngine {
                 return Err(DownloadCancelled.into());
             }
 
-            let chunk = chunk_result.map_err(|e| anyhow!("Failed to read chunk: {}", e))?;
+            let chunk = chunk_result.map_err(|e| anyhow!("读取下载数据失败：{}", e))?;
             file.write_all(&chunk)
                 .await
-                .map_err(|e| anyhow!("Failed to write chunk to file: {}", e))?;
+                .map_err(|e| anyhow!("写入模型文件失败：{}", e))?;
 
             downloaded += chunk.len() as u64;
             let progress = if total_size > 0 {
@@ -1109,7 +1109,7 @@ impl WhisperEngine {
 
         file.flush()
             .await
-            .map_err(|e| anyhow!("Failed to flush file: {}", e))?;
+            .map_err(|e| anyhow!("刷新模型文件失败：{}", e))?;
 
         if active_download.cancellation.is_cancelled() {
             return Err(DownloadCancelled.into());
@@ -1142,7 +1142,7 @@ impl WhisperEngine {
             match tokio::time::timeout(cleanup_timeout, completion.changed()).await {
                 Ok(Ok(())) => {}
                 Ok(Err(_)) => {
-                    return Err(anyhow!("Download worker ended before completing cancellation cleanup"));
+                    return Err(anyhow!("下载任务在完成取消清理前意外结束"));
                 }
                 Err(_) => {
                     return Ok(CancelDownloadOutcome::Pending);

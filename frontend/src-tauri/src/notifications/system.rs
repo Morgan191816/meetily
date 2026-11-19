@@ -41,7 +41,7 @@ impl<R: Runtime> SystemNotificationHandler<R> {
             }
             Err(e) => {
                 log_error!("Failed to show Tauri notification: {}", e);
-                Err(anyhow!("Failed to show notification: {}", e))
+                Err(anyhow!("显示通知失败：{}", e))
             }
         }
     }

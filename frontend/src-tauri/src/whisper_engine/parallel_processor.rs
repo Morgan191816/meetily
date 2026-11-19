@@ -223,7 +223,7 @@ impl ParallelProcessor {
             {
                 let mut engine_guard = engine_ref.write().await;
                 let engine = WhisperEngine::new().map_err(|e| anyhow!("Failed to create WhisperEngine: {}", e))?;
-                engine.load_model(&model_name).await.map_err(|e| anyhow!("Failed to load model {}: {}", model_name, e))?;
+                engine.load_model(&model_name).await.map_err(|e| anyhow!("模型 {} 加载失败：{}", model_name, e))?;
                 *engine_guard = Some(engine);
                 info!("Worker {} loaded model {}", worker_id, model_name);
             }

@@ -365,12 +365,12 @@ impl SummaryService {
             match SettingsRepository::get_api_key(&pool, &model_provider).await {
                 Ok(Some(key)) if !key.is_empty() => key,
                 Ok(None) | Ok(Some(_)) => {
-                    let err_msg = format!("API key not found for {}", &model_provider);
+                    let err_msg = format!("未找到「{}」的 API 密钥", &model_provider);
                     Self::fail_and_cleanup(&pool, &meeting_id, started_at, &err_msg).await;
                     return;
                 }
                 Err(e) => {
-                    let err_msg = format!("Failed to retrieve API key for {}: {}", &model_provider, e);
+                    let err_msg = format!("获取「{}」的 API 密钥失败：{}", &model_provider, e);
                     Self::fail_and_cleanup(&pool, &meeting_id, started_at, &err_msg).await;
                     return;
                 }
@@ -409,12 +409,12 @@ impl SummaryService {
                         )
                     }
                     Ok(None) => {
-                        let err_msg = "Custom OpenAI provider selected but no configuration found";
+                        let err_msg = "已选择自定义 OpenAI 提供方，但未找到相应配置";
                         Self::fail_and_cleanup(&pool, &meeting_id, started_at, err_msg).await;
                         return;
                     }
                     Err(e) => {
-                        let err_msg = format!("Failed to retrieve custom OpenAI config: {}", e);
+                        let err_msg = format!("获取自定义 OpenAI 配置失败：{}", e);
                         Self::fail_and_cleanup(&pool, &meeting_id, started_at, &err_msg).await;
                         return;
                     }
@@ -471,7 +471,7 @@ impl SummaryService {
         let template = match templates::get_template(&template_id) {
             Ok(template) => template,
             Err(e) => {
-                let err_msg = format!("Failed to load template '{}': {}", template_id, e);
+                let err_msg = format!("加载模板「{}」失败：{}", template_id, e);
                 Self::fail_and_cleanup(&pool, &meeting_id, started_at, &err_msg).await;
                 return;
             }

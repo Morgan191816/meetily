@@ -118,22 +118,22 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
       const errorMsg = error instanceof Error ? error.message : String(error);
 
       // Check for device-related errors
-      if (errorMsg.startsWith('Your saved ') && errorMsg.includes('Choose a device in Recording Settings.')) {
+      if (errorMsg.startsWith('你保存的') && errorMsg.includes('请在录音设置中重新选择设备')) {
         setDeviceError({ title: '请更新音频设备选择', message: '你保存的麦克风/系统声音选择需要更新，请在录音设置中重新选择设备。' });
-      } else if (errorMsg.includes('microphone') || errorMsg.includes('mic') || errorMsg.includes('input')) {
+      } else if (errorMsg.includes('权限') || errorMsg.includes('permission')) {
+        setDeviceError({
+          title: '需要权限',
+          message: '录音需要相应权限。请：\n• 在系统设置中授予麦克风访问权限\n• 在系统设置中授予屏幕与系统音频录制权限（macOS）\n• 授予权限后重启应用'
+        });
+      } else if (errorMsg.includes('麦克风') || errorMsg.includes('microphone') || errorMsg.includes('mic') || errorMsg.includes('input')) {
         setDeviceError({
           title: '麦克风不可用',
           message: '无法访问麦克风。请检查：\n• 麦克风已连接\n• 应用已获得麦克风权限\n• 没有其他应用正在占用麦克风'
         });
-      } else if (errorMsg.includes('system audio') || errorMsg.includes('speaker') || errorMsg.includes('output')) {
+      } else if (errorMsg.includes('系统声音') || errorMsg.includes('system audio') || errorMsg.includes('speaker') || errorMsg.includes('output')) {
         setDeviceError({
           title: '系统声音不可用',
           message: '无法采集系统声音。请检查：\n• 已安装虚拟音频设备（如 BlackHole）\n• 应用已获得屏幕与系统音频录制权限（macOS）\n• 系统声音已正确配置'
-        });
-      } else if (errorMsg.includes('permission')) {
-        setDeviceError({
-          title: '需要权限',
-          message: '录音需要相应权限。请：\n• 在系统设置中授予麦克风访问权限\n• 在系统设置中授予屏幕与系统音频录制权限（macOS）\n• 授予权限后重启应用'
         });
       } else {
         setDeviceError({

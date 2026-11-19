@@ -142,7 +142,7 @@ pub struct PulseCapture {
     channels: u16,
 }
 
-pub const SERVER_UNAVAILABLE: &str = "Audio capture is unavailable. Ensure PulseAudio or PipeWire’s PulseAudio compatibility service is running.";
+pub const SERVER_UNAVAILABLE: &str = "音频采集不可用。请确认 PulseAudio 或 PipeWire 的 PulseAudio 兼容服务正在运行。";
 
 impl PulseCapture {
     pub fn new_system(source: &str) -> Result<Self> { Self::new(source, 2) }

@@ -38,7 +38,7 @@ impl ImportGuard {
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
         {
-            return Err("Import already in progress".to_string());
+            return Err("导入已在进行中".to_string());
         }
         Ok(ImportGuard)
     }
@@ -121,7 +121,7 @@ pub fn cancel_import() {
 pub fn validate_audio_file(path: &Path) -> Result<AudioFileInfo> {
     // Check file exists
     if !path.exists() {
-        return Err(anyhow!("File does not exist: {}", path.display()));
+        return Err(anyhow!("文件不存在：{}", path.display()));
     }
 
     // Check extension
@@ -133,7 +133,7 @@ pub fn validate_audio_file(path: &Path) -> Result<AudioFileInfo> {
 
     if !AUDIO_EXTENSIONS.contains(&extension.as_str()) {
         return Err(anyhow!(
-            "Unsupported format: .{}. Supported: {}",
+            "不支持的格式：.{}。支持：{}",
             extension,
             AUDIO_EXTENSIONS.join(", ")
         ));
@@ -141,13 +141,13 @@ pub fn validate_audio_file(path: &Path) -> Result<AudioFileInfo> {
 
     // Get file size
     let metadata = std::fs::metadata(path)
-        .map_err(|e| anyhow!("Cannot read file: {}", e))?;
+        .map_err(|e| anyhow!("无法读取文件：{}", e))?;
     let size_bytes = metadata.len();
 
     // Check file size limit
     if size_bytes > MAX_FILE_SIZE_BYTES {
         return Err(anyhow!(
-            "File too large: {:.2}GB. Maximum supported size is {}GB",
+            "文件过大：{:.2}GB。最大支持 {}GB",
             size_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
             MAX_FILE_SIZE_BYTES / (1024 * 1024 * 1024)
         ));
@@ -157,7 +157,7 @@ pub fn validate_audio_file(path: &Path) -> Result<AudioFileInfo> {
     let filename = path
         .file_stem()
         .and_then(|s| s.to_str())
-        .unwrap_or("Imported Audio")
+        .unwrap_or("导入的音频")
         .to_string();
 
     // Try fast metadata-only validation first
@@ -199,7 +199,7 @@ fn extract_duration_from_metadata(path: &Path) -> Result<f64> {
 
     // Open the file
     let file = std::fs::File::open(path)
-        .map_err(|e| anyhow!("Failed to open audio file: {}", e))?;
+        .map_err(|e| anyhow!("无法打开音频文件：{}", e))?;
 
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
 
@@ -217,7 +217,7 @@ fn extract_duration_from_metadata(path: &Path) -> Result<f64> {
             &FormatOptions::default(),
             &MetadataOptions::default(),
         )
-        .map_err(|e| anyhow!("Failed to probe audio format: {}", e))?;
+        .map_err(|e| anyhow!("无法探测音频格式：{}", e))?;
 
     let format = probed.format;
 
@@ -227,18 +227,18 @@ fn extract_duration_from_metadata(path: &Path) -> Result<f64> {
         .tracks()
         .iter()
         .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
-        .ok_or_else(|| anyhow!("No audio track found in file"))?;
+        .ok_or_else(|| anyhow!("文件中未找到音轨"))?;
 
     // Extract duration from metadata
     let sample_rate = track
         .codec_params
         .sample_rate
-        .ok_or_else(|| anyhow!("Unknown sample rate"))?;
+        .ok_or_else(|| anyhow!("未知采样率"))?;
 
     let n_frames = track
         .codec_params
         .n_frames
-        .ok_or_else(|| anyhow!("Frame count not available in metadata"))?;
+        .ok_or_else(|| anyhow!("元数据中没有帧数信息"))?;
 
     let duration_seconds = n_frames as f64 / sample_rate as f64;
 
@@ -319,7 +319,7 @@ async fn run_import<R: Runtime>(
 
     // Validate source file
     if !source.exists() {
-        return Err(anyhow!("Source file not found: {}", source.display()));
+        return Err(anyhow!("源文件不存在：{}", source.display()));
     }
 
     info!(
@@ -327,11 +327,11 @@ async fn run_import<R: Runtime>(
         title, source_path, language, model, provider
     );
 
-    emit_progress(&app, "copying", 5, "Creating meeting folder...");
+    emit_progress(&app, "copying", 5, "正在创建会议文件夹…");
 
     // Check for cancellation
     if IMPORT_CANCELLED.load(Ordering::SeqCst) {
-        return Err(anyhow!("Import cancelled"));
+        return Err(anyhow!("导入已取消"));
     }
 
     // Create meeting folder
@@ -339,7 +339,7 @@ async fn run_import<R: Runtime>(
     let meeting_folder = create_meeting_folder(&base_folder, &title, false)?;
 
     // Copy audio file to meeting folder
-    emit_progress(&app, "copying", 10, "Copying audio file...");
+    emit_progress(&app, "copying", 10, "正在复制音频文件…");
 
     let dest_filename = format!(
         "audio.{}",
@@ -354,8 +354,8 @@ async fn run_import<R: Runtime>(
     let dst = dest_path.clone();
     tokio::task::spawn_blocking(move || std::fs::copy(&src, &dst))
         .await
-        .map_err(|e| anyhow!("Copy task join error: {}", e))?
-        .map_err(|e| anyhow!("Failed to copy audio file: {}", e))?;
+        .map_err(|e| anyhow!("复制任务失败：{}", e))?
+        .map_err(|e| anyhow!("复制音频文件失败：{}", e))?;
 
     info!("Copied audio to: {}", dest_path.display());
 
@@ -363,10 +363,10 @@ async fn run_import<R: Runtime>(
     if IMPORT_CANCELLED.load(Ordering::SeqCst) {
         // Cleanup: remove the meeting folder
         let _ = std::fs::remove_dir_all(&meeting_folder);
-        return Err(anyhow!("Import cancelled"));
+        return Err(anyhow!("导入已取消"));
     }
 
-    emit_progress(&app, "decoding", 15, "Decoding audio file...");
+    emit_progress(&app, "decoding", 15, "正在解码音频文件…");
 
     // Decode the audio file with progress updates
     let app_for_decode = app.clone();
@@ -381,7 +381,7 @@ async fn run_import<R: Runtime>(
         decode_audio_file_with_progress(&path_for_decode, Some(decode_progress))
     })
     .await
-    .map_err(|e| anyhow!("Decode task join error: {}", e))??;
+    .map_err(|e| anyhow!("解码任务失败：{}", e))??;
     let duration_seconds = decoded.duration_seconds;
 
     info!(
@@ -389,12 +389,12 @@ async fn run_import<R: Runtime>(
         duration_seconds, decoded.sample_rate, decoded.channels
     );
 
-    emit_progress(&app, "resampling", 20, "Converting audio format...");
+    emit_progress(&app, "resampling", 20, "正在转换音频格式…");
 
     // Check for cancellation
     if IMPORT_CANCELLED.load(Ordering::SeqCst) {
         let _ = std::fs::remove_dir_all(&meeting_folder);
-        return Err(anyhow!("Import cancelled"));
+        return Err(anyhow!("导入已取消"));
     }
 
     // Convert to 16kHz mono format with progress updates
@@ -409,18 +409,18 @@ async fn run_import<R: Runtime>(
         decoded.to_whisper_format_with_progress(Some(resample_progress))
     })
     .await
-    .map_err(|e| anyhow!("Resample task join error: {}", e))?;
+    .map_err(|e| anyhow!("重采样任务失败：{}", e))?;
     info!(
         "Converted to 16kHz mono format: {} samples",
         audio_samples.len()
     );
 
-    emit_progress(&app, "vad", 25, "Detecting speech segments...");
+    emit_progress(&app, "vad", 25, "正在检测语音片段…");
 
     // Check for cancellation
     if IMPORT_CANCELLED.load(Ordering::SeqCst) {
         let _ = std::fs::remove_dir_all(&meeting_folder);
-        return Err(anyhow!("Import cancelled"));
+        return Err(anyhow!("导入已取消"));
     }
 
     // Use VAD to find speech segments
@@ -437,7 +437,7 @@ async fn run_import<R: Runtime>(
                     "vad",
                     overall_progress,
                     &format!(
-                        "Detecting speech segments... {}% ({} found)",
+                        "正在检测语音片段… {}%（已找到 {} 段）",
                         vad_progress, segments_found
                     ),
                 );
@@ -446,8 +446,8 @@ async fn run_import<R: Runtime>(
         )
     })
     .await
-    .map_err(|e| anyhow!("VAD task panicked: {}", e))?
-    .map_err(|e| anyhow!("VAD processing failed: {}", e))?;
+    .map_err(|e| anyhow!("VAD 任务失败：{}", e))?
+    .map_err(|e| anyhow!("VAD 处理失败：{}", e))?;
 
     let total_segments = speech_segments.len();
     info!("VAD detected {} speech segments (redemption_time={}ms)", total_segments, VAD_REDEMPTION_TIME_MS);
@@ -485,10 +485,9 @@ async fn run_import<R: Runtime>(
         let _ = app.emit(
             "import-warning",
             ImportWarning {
-                warning: "No speech detected in audio file".to_string(),
+                warning: "音频文件中未检测到语音".to_string(),
                 details: Some(
-                    "The file was imported successfully, but VAD did not detect any speech. \
-                     The meeting was created but contains no transcripts.".to_string()
+                    "文件已成功导入，但语音检测未发现任何语音内容。会议已创建，但没有逐字稿。".to_string()
                 ),
             },
         );
@@ -498,10 +497,10 @@ async fn run_import<R: Runtime>(
     // Check for cancellation
     if IMPORT_CANCELLED.load(Ordering::SeqCst) {
         let _ = std::fs::remove_dir_all(&meeting_folder);
-        return Err(anyhow!("Import cancelled"));
+        return Err(anyhow!("导入已取消"));
     }
 
-    emit_progress(&app, "transcribing", 30, "Loading transcription engine...");
+    emit_progress(&app, "transcribing", 30, "正在加载转写引擎…");
 
     // Initialize the Whisper engine
     let whisper_engine = if total_segments > 0 {
@@ -542,7 +541,7 @@ async fn run_import<R: Runtime>(
     for (i, segment) in processable_segments.iter().enumerate() {
         if IMPORT_CANCELLED.load(Ordering::SeqCst) {
             let _ = std::fs::remove_dir_all(&meeting_folder);
-            return Err(anyhow!("Import cancelled"));
+            return Err(anyhow!("导入已取消"));
         }
 
         let progress = 30 + ((i as f32 / processable_count.max(1) as f32) * 50.0) as u32;
@@ -552,7 +551,7 @@ async fn run_import<R: Runtime>(
             "transcribing",
             progress,
             &format!(
-                "Transcribing segment {} of {} ({:.1}s)...",
+                "正在转写第 {} / {} 段（{:.1} 秒）…",
                 i + 1,
                 processable_count,
                 segment_duration_sec
@@ -574,7 +573,7 @@ async fn run_import<R: Runtime>(
         let (text, conf, _) = engine
             .transcribe_audio_with_confidence(segment.samples.clone(), language.clone())
             .await
-            .map_err(|e| anyhow!("Whisper transcription failed on segment {}: {}", i, e))?;
+            .map_err(|e| anyhow!("第 {} 段 Whisper 转写失败：{}", i, e))?;
 
         let trimmed = text.trim();
         if !trimmed.is_empty() {
@@ -605,10 +604,10 @@ async fn run_import<R: Runtime>(
     // Check for cancellation
     if IMPORT_CANCELLED.load(Ordering::SeqCst) {
         let _ = std::fs::remove_dir_all(&meeting_folder);
-        return Err(anyhow!("Import cancelled"));
+        return Err(anyhow!("导入已取消"));
     }
 
-    emit_progress(&app, "saving", 85, "Creating meeting...");
+    emit_progress(&app, "saving", 85, "正在创建会议…");
 
     // Create transcript segments
     let segments = create_transcript_segments(&all_transcripts);
@@ -616,7 +615,7 @@ async fn run_import<R: Runtime>(
     // Save to database
     let app_state = app
         .try_state::<AppState>()
-        .ok_or_else(|| anyhow!("App state not available"))?;
+        .ok_or_else(|| anyhow!("应用状态不可用"))?;
 
     let meeting_id = create_meeting_with_transcripts(
         app_state.db_manager.pool(),
@@ -627,7 +626,7 @@ async fn run_import<R: Runtime>(
     .await?;
 
     // Write transcripts.json and metadata.json to the meeting folder
-    emit_progress(&app, "saving", 90, "Writing transcript files...");
+    emit_progress(&app, "saving", 90, "正在写入逐字稿文件…");
 
     if let Err(e) = write_transcripts_json(&meeting_folder, &segments) {
         warn!("Failed to write transcripts.json: {}", e);
@@ -644,7 +643,7 @@ async fn run_import<R: Runtime>(
         warn!("Failed to write metadata.json: {}", e);
     }
 
-    emit_progress(&app, "complete", 100, "Import complete");
+    emit_progress(&app, "complete", 100, "导入完成");
 
     Ok(ImportResult {
         meeting_id,
@@ -678,10 +677,10 @@ async fn create_meeting_with_transcripts(
     let now = chrono::Utc::now();
 
     // Start transaction
-    let mut conn = pool.acquire().await.map_err(|e| anyhow!("DB error: {}", e))?;
+    let mut conn = pool.acquire().await.map_err(|e| anyhow!("数据库错误：{}", e))?;
     let mut tx = sqlx::Connection::begin(&mut *conn)
         .await
-        .map_err(|e| anyhow!("Failed to start transaction: {}", e))?;
+        .map_err(|e| anyhow!("无法开始数据库事务：{}", e))?;
 
     // Insert meeting
     sqlx::query(
@@ -695,7 +694,7 @@ async fn create_meeting_with_transcripts(
     .bind(&folder_path)
     .execute(&mut *tx)
     .await
-    .map_err(|e| anyhow!("Failed to create meeting: {}", e))?;
+    .map_err(|e| anyhow!("创建会议失败：{}", e))?;
 
     // Insert transcripts
     for segment in segments {
@@ -712,12 +711,12 @@ async fn create_meeting_with_transcripts(
         .bind(segment.duration)
         .execute(&mut *tx)
         .await
-        .map_err(|e| anyhow!("Failed to insert transcript: {}", e))?;
+        .map_err(|e| anyhow!("写入逐字稿失败：{}", e))?;
     }
 
     tx.commit()
         .await
-        .map_err(|e| anyhow!("Failed to commit transaction: {}", e))?;
+        .map_err(|e| anyhow!("提交数据库事务失败：{}", e))?;
 
     info!(
         "Created meeting '{}' with {} transcripts",
@@ -765,12 +764,12 @@ async fn get_or_init_whisper<R: Runtime>(
 
                 e.load_model(&target_model)
                     .await
-                    .map_err(|e| anyhow!("Failed to load model '{}': {}", target_model, e))?;
+                    .map_err(|e| anyhow!("模型「{}」加载失败：{}", target_model, e))?;
             }
 
             Ok(e)
         }
-        None => Err(anyhow!("Whisper engine not initialized")),
+        None => Err(anyhow!("Whisper 引擎未初始化")),
     }
 }
 
@@ -778,14 +777,14 @@ async fn get_or_init_whisper<R: Runtime>(
 async fn get_configured_model<R: Runtime>(app: &AppHandle<R>) -> Result<String> {
     let app_state = app
         .try_state::<AppState>()
-        .ok_or_else(|| anyhow!("App state not available"))?;
+        .ok_or_else(|| anyhow!("应用状态不可用"))?;
 
     let result: Option<(String, String)> = sqlx::query_as(
         "SELECT provider, model FROM transcript_settings WHERE id = '1'",
     )
     .fetch_optional(app_state.db_manager.pool())
     .await
-    .map_err(|e| anyhow!("Failed to query config: {}", e))?;
+    .map_err(|e| anyhow!("查询配置失败：{}", e))?;
 
     match result {
         Some((provider, model)) => {
@@ -850,11 +849,11 @@ pub async fn select_and_validate_audio_command<R: Runtime>(
         app_clone
             .dialog()
             .file()
-            .add_filter("Audio Files", &AUDIO_EXTENSIONS.iter().map(|s| *s).collect::<Vec<_>>())
+            .add_filter("音频文件", &AUDIO_EXTENSIONS.iter().map(|s| *s).collect::<Vec<_>>())
             .blocking_pick_file()
     })
     .await
-    .map_err(|e| format!("File dialog task failed: {}", e))?;
+    .map_err(|e| format!("文件对话框操作失败：{}", e))?;
 
     match file_path {
         Some(path) => {
@@ -895,7 +894,7 @@ pub async fn start_import_audio_command<R: Runtime>(
 ) -> Result<ImportStarted, String> {
     // Check if import is already in progress (guard will be acquired in start_import)
     if IMPORT_IN_PROGRESS.load(Ordering::SeqCst) {
-        return Err("Import already in progress".to_string());
+        return Err("导入已在进行中".to_string());
     }
 
     // Spawn import in background
@@ -908,7 +907,7 @@ pub async fn start_import_audio_command<R: Runtime>(
     });
 
     Ok(ImportStarted {
-        message: "Import started".to_string(),
+        message: "导入已开始".to_string(),
     })
 }
 
@@ -916,7 +915,7 @@ pub async fn start_import_audio_command<R: Runtime>(
 #[tauri::command]
 pub async fn cancel_import_command() -> Result<(), String> {
     if !is_import_in_progress() {
-        return Err("No import in progress".to_string());
+        return Err("当前没有正在进行的导入".to_string());
     }
     cancel_import();
     Ok(())
@@ -976,7 +975,7 @@ mod tests {
     fn test_validate_audio_file_nonexistent() {
         let result = validate_audio_file(Path::new("/nonexistent/file.mp4"));
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("does not exist"));
+        assert!(result.unwrap_err().to_string().contains("文件不存在"));
     }
 
     #[test]
@@ -988,7 +987,7 @@ mod tests {
 
         let result = validate_audio_file(&temp_file);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unsupported format"));
+        assert!(result.unwrap_err().to_string().contains("不支持的格式"));
 
         // Cleanup
         let _ = std::fs::remove_file(temp_file);

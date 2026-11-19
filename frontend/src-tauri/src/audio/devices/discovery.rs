@@ -189,8 +189,7 @@ pub async fn verify_microphone_access() -> anyhow::Result<()> {
 
         drop(stream);
         Err(anyhow::anyhow!(
-            "Microphone permission not granted. Please allow microphone access in \
-             System Settings > Privacy & Security > Microphone, then try again."
+            "未获得麦克风权限。请在「系统设置 > 隐私与安全性 > 麦克风」中允许访问后重试。"
         ))
     })
     .await

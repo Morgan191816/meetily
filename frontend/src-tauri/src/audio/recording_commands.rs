@@ -140,7 +140,7 @@ static TRANSCRIPT_LISTENER_ID: Mutex<Option<tauri::EventId>> = Mutex::new(None);
 
 const TRANSCRIPTION_RUNTIME_START_ERROR_CODE: &str =
     "TRANSCRIPTION_RUNTIME_INITIALIZATION_FAILED";
-const TRANSCRIPTION_RUNTIME_USER_MESSAGE: &str = "Speech recognition could not initialize. Restart Morgan Meet. If the problem continues, repair or reinstall the app.";
+const TRANSCRIPTION_RUNTIME_USER_MESSAGE: &str = "语音识别初始化失败，请重启 Morgan Meet。若问题仍然存在，请修复或重新安装应用。";
 
 // ============================================================================
 // PUBLIC TYPES
@@ -178,7 +178,7 @@ fn map_recording_start_error<R: Runtime>(
             }
             TRANSCRIPTION_RUNTIME_START_ERROR_CODE.to_string()
         }
-        RecordingStartError::Other(error) => format!("Failed to start recording: {error}"),
+        RecordingStartError::Other(error) => format!("录音启动失败：{error}"),
     }
 }
 
@@ -446,7 +446,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     let current_recording_state = IS_RECORDING.load(Ordering::SeqCst);
     info!("🔍 IS_RECORDING state check: {}", current_recording_state);
     if current_recording_state || IS_RECORDING_STOPPING.load(Ordering::SeqCst) {
-        return Err("Recording already in progress".to_string());
+        return Err("录音已在进行中".to_string());
     }
 
     if let Err(error) = crate::ensure_onnx_runtime_available() {
@@ -465,7 +465,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         // (download progress is already shown in top-right toast)
         let _ = app.emit("transcription-error", serde_json::json!({
             "error": validation_error,
-            "userMessage": format!("Recording cannot start: {}", validation_error),
+            "userMessage": format!("无法开始录音：{}", validation_error),
             "actionable": false,
             "phase": "startup"
         }));
@@ -476,7 +476,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
 
     // Notify frontend that startup has begun (surfaces STARTING state)
     app.emit("recording-starting", serde_json::json!({
-        "message": "Recording initialization started"
+        "message": "录音初始化已开始"
     })).map_err(|e| e.to_string())?;
 
     // Load recording preferences to get auto_save AND device preferences
@@ -556,7 +556,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     #[cfg(target_os = "linux")]
     if let (Some(requested), Some(active)) = (preferred_system_name.as_deref(), manager.get_state().get_system_device()) {
         if requested != active.name {
-            let _ = app.emit("linux-audio-notice", serde_json::json!({"error": false, "message": format!("System audio switched to {} for this meeting.", super::devices::device_label(&active.name))}));
+            let _ = app.emit("linux-audio-notice", serde_json::json!({"error": false, "message": format!("系统声音已切换为 {}，本次会议将使用该设备。", super::devices::device_label(&active.name))}));
         }
     }
     #[cfg(target_os = "linux")]
@@ -628,7 +628,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
 
     // Emit success event
     app.emit("recording-started", serde_json::json!({
-        "message": "Recording started successfully with parallel processing",
+        "message": "录音已成功开始，并行处理已启动",
         "devices": ["Default Microphone", "Default System Audio"],
         "workers": 3
     })).map_err(|e| e.to_string())?;
@@ -674,7 +674,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     let current_recording_state = IS_RECORDING.load(Ordering::SeqCst);
     info!("🔍 IS_RECORDING state check: {}", current_recording_state);
     if current_recording_state || IS_RECORDING_STOPPING.load(Ordering::SeqCst) {
-        return Err("Recording already in progress".to_string());
+        return Err("录音已在进行中".to_string());
     }
 
     if let Err(error) = crate::ensure_onnx_runtime_available() {
@@ -693,7 +693,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
         // (download progress is already shown in top-right toast)
         let _ = app.emit("transcription-error", serde_json::json!({
             "error": validation_error,
-            "userMessage": format!("Recording cannot start: {}", validation_error),
+            "userMessage": format!("无法开始录音：{}", validation_error),
             "actionable": false,
             "phase": "startup"
         }));
@@ -704,7 +704,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
 
     // Notify frontend that startup has begun (surfaces STARTING state)
     app.emit("recording-starting", serde_json::json!({
-        "message": "Recording initialization started"
+        "message": "录音初始化已开始"
     })).map_err(|e| e.to_string())?;
 
     let prefs = super::recording_preferences::load_recording_preferences(&app).await
@@ -770,7 +770,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     #[cfg(target_os = "linux")]
     if let (Some(requested), Some(active)) = (system_device_name.as_deref(), manager.get_state().get_system_device()) {
         if requested != active.name {
-            let _ = app.emit("linux-audio-notice", serde_json::json!({"error": false, "message": format!("System audio switched to {} for this meeting.", super::devices::device_label(&active.name))}));
+            let _ = app.emit("linux-audio-notice", serde_json::json!({"error": false, "message": format!("系统声音已切换为 {}，本次会议将使用该设备。", super::devices::device_label(&active.name))}));
         }
     }
     #[cfg(target_os = "linux")]
@@ -842,7 +842,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
 
     // Emit success event
     app.emit("recording-started", serde_json::json!({
-        "message": "Recording started with custom devices and parallel processing",
+        "message": "录音已使用指定设备开始，并行处理已启动",
         "devices": [
             mic_device_name.unwrap_or_else(|| "Default Microphone".to_string()),
             system_device_name.unwrap_or_else(|| "Default System Audio".to_string())
@@ -902,7 +902,7 @@ async fn stop_recording_for_session<R: Runtime>(
         "recording-shutdown-progress",
         serde_json::json!({
             "stage": "stopping_audio",
-            "message": "Stopping audio capture...",
+            "message": "正在停止音频采集…",
             "progress": 20
         }),
     );
@@ -931,7 +931,7 @@ async fn stop_recording_for_session<R: Runtime>(
             return Err(format!("Failed to stop audio streams: {}", e));
             #[cfg(target_os = "linux")]
             let _ = app.emit("linux-audio-notice", serde_json::json!({"error": true,
-                "message": format!("Some queued audio could not be preserved: {}. Saving the available recording.", e)}));
+                "message": format!("部分排队中的音频未能保留：{}。正在保存已录制的部分。", e)}));
         }
     }
 
@@ -950,7 +950,7 @@ async fn stop_recording_for_session<R: Runtime>(
         "recording-shutdown-progress",
         serde_json::json!({
             "stage": "processing_transcripts",
-            "message": "Processing remaining transcript chunks...",
+            "message": "正在处理剩余的逐字稿片段…",
             "progress": 40
         }),
     );
@@ -978,7 +978,7 @@ async fn stop_recording_for_session<R: Runtime>(
                     "recording-shutdown-progress",
                     serde_json::json!({
                         "stage": "processing_transcripts",
-                        "message": format!("Processing transcripts... ({}s elapsed)", elapsed),
+                        "message": format!("正在处理逐字稿…（已用 {} 秒）", elapsed),
                         "progress": 40,
                         "detailed": true,
                         "elapsed_seconds": elapsed
@@ -1016,7 +1016,7 @@ async fn stop_recording_for_session<R: Runtime>(
         "recording-shutdown-progress",
         serde_json::json!({
             "stage": "unloading_model",
-            "message": "Unloading speech recognition model...",
+            "message": "正在卸载语音识别模型…",
             "progress": 70
         }),
     );
@@ -1156,7 +1156,7 @@ async fn stop_recording_for_session<R: Runtime>(
         "recording-shutdown-progress",
         serde_json::json!({
             "stage": "finalizing",
-            "message": "Finalizing recording and cleaning up resources...",
+            "message": "正在完成录音并清理资源…",
             "progress": 90
         }),
     );
@@ -1222,7 +1222,7 @@ async fn stop_recording_for_session<R: Runtime>(
         "recording-shutdown-progress",
         serde_json::json!({
             "stage": "complete",
-            "message": "Recording stopped successfully",
+            "message": "录音已成功停止",
             "progress": 100
         }),
     );
@@ -1231,7 +1231,7 @@ async fn stop_recording_for_session<R: Runtime>(
     app.emit(
         "recording-stopped",
         serde_json::json!({
-            "message": "Recording stopped - frontend will save after all transcripts received",
+            "message": "录音已停止，前端将在收到全部逐字稿后保存",
             "folder_path": folder_path_str,
             "meeting_name": meeting_name_str
         }),
@@ -1278,7 +1278,7 @@ pub async fn pause_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String
         app.emit(
             "recording-paused",
             serde_json::json!({
-                "message": "Recording paused"
+                "message": "录音已暂停"
             }),
         )
         .map_err(|e| e.to_string())?;
@@ -1312,7 +1312,7 @@ pub async fn resume_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), Strin
         app.emit(
             "recording-resumed",
             serde_json::json!({
-                "message": "Recording resumed"
+                "message": "录音已恢复"
             }),
         )
         .map_err(|e| e.to_string())?;
@@ -1653,14 +1653,14 @@ fn spawn_device_event_processor<R: Runtime>(
                         if linux_audio_loss_expired(&mut audio_loss_since, all_ended, tokio::time::Instant::now())
                             && !MIC_SWAP_IN_PROGRESS.load(Ordering::SeqCst)
                         {
-                            let _ = app.emit("linux-audio-notice", serde_json::json!({"error": true, "message": "Audio capture is unavailable. Stopping and saving this recording."}));
+                            let _ = app.emit("linux-audio-notice", serde_json::json!({"error": true, "message": "音频采集不可用，正在停止并保存本次录音。"}));
                             let result = stop_recording_for_session(app.clone(), RecordingArgs { save_path: String::new() }, Some(&session)).await;
                             let result = result.and_then(|outcome| {
                                 if outcome == StopOutcome::Stopped { app.emit("recording-stop-complete", true).map_err(|e| e.to_string()) } else { Ok(()) }
                             });
                             if let Err(e) = result {
                                 error!("Automatic recording shutdown failed: {}", e);
-                                let _ = app.emit("linux-audio-notice", serde_json::json!({"error": true, "message": format!("Could not finish saving the recording: {}", e)}));
+                                let _ = app.emit("linux-audio-notice", serde_json::json!({"error": true, "message": format!("录音保存未能完成：{}", e)}));
                             }
                             break;
                         }
@@ -1782,7 +1782,7 @@ async fn swap_linux_stream<R: Runtime>(
         if let Err(e) = old.stop().await {
             if session_live(session) {
                 let _ = app.emit("linux-audio-notice", serde_json::json!({"error": true,
-                    "message": format!("Some audio from the previous device could not be preserved: {}", e)}));
+                    "message": format!("上一个设备的部分音频未能保留：{}", e)}));
             }
         }
     }
@@ -1812,12 +1812,12 @@ async fn follow_linux_default<R: Runtime>(app: &AppHandle<R>, session: &Arc<supe
         Ok(()) => {
             *attempts = (String::new(), 0);
             if session_live(session) {
-                let role = if microphone { "Microphone" } else { "System audio" };
-                let _ = app.emit("linux-audio-notice", serde_json::json!({"error": false, "message": format!("{} switched to {} to follow your system default.", role, super::devices::device_label(&device.name))}));
+                let role = if microphone { "麦克风" } else { "系统声音" };
+                let _ = app.emit("linux-audio-notice", serde_json::json!({"error": false, "message": format!("{}已切换为 {}，以跟随系统默认设备。", role, super::devices::device_label(&device.name))}));
             }
         }
         Err(e) if attempts.1 == 1 && session_live(session) => {
-            let _ = app.emit("linux-audio-notice", serde_json::json!({"error": true, "message": format!("Could not follow the default audio device: {}", e)}));
+            let _ = app.emit("linux-audio-notice", serde_json::json!({"error": true, "message": format!("无法跟随默认音频设备：{}", e)}));
         }
         Err(_) => {}
     }
@@ -1915,15 +1915,15 @@ async fn repair_linux_stream<R: Runtime>(
         |device| async move { swap_linux_stream(app, session, device, microphone, false).await },
     ).await;
     if !session_live(session) { return; }
-    let role = if microphone { "Microphone" } else { "System audio" };
+    let role = if microphone { "麦克风" } else { "系统声音" };
     match result {
         Ok(Some(device)) if device.name != previous_name => {
             let _ = app.emit("linux-audio-notice", serde_json::json!({"error": false,
-                "message": format!("{} switched to {} for this meeting.", role, super::devices::device_label(&device.name))}));
+                "message": format!("{}已切换为 {}，本次会议将使用该设备。", role, super::devices::device_label(&device.name))}));
         }
         Err(e) if attempts.1 == 1 => {
             let _ = app.emit("linux-audio-notice", serde_json::json!({"error": true,
-                "message": format!("{} is unavailable: {}", role, e)}));
+                "message": format!("{}不可用：{}", role, e)}));
         }
         _ => {}
     }
@@ -2041,7 +2041,7 @@ async fn trigger_mic_fallback_to_default<R: Runtime>(
             let _ = app.emit(
                 "mic-swap-failed",
                 serde_json::json!({
-                    "error": format!("Failed to query default input: {}", e),
+                    "error": format!("查询默认输入设备失败：{}", e),
                     "device_name": disconnected_name,
                     "device_label": super::devices::device_label(&disconnected_name),
                 }),
@@ -2083,7 +2083,7 @@ async fn trigger_mic_fallback_to_default<R: Runtime>(
                 let _ = app.emit(
                     "mic-swap-failed",
                     serde_json::json!({
-                        "error": "System default input still reports disconnected device after retry",
+                        "error": "重试后系统默认输入设备仍指向已断开的设备",
                         "device_name": disconnected_name,
                         "device_label": super::devices::device_label(&disconnected_name),
                     }),
@@ -2102,7 +2102,7 @@ async fn trigger_mic_fallback_to_default<R: Runtime>(
                 let _ = app.emit(
                     "mic-swap-failed",
                     serde_json::json!({
-                        "error": format!("Failed to re-query default input: {}", e),
+                        "error": format!("重新查询默认输入设备失败：{}", e),
                         "device_name": disconnected_name,
                         "device_label": super::devices::device_label(&disconnected_name),
                     }),

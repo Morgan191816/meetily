@@ -103,10 +103,10 @@ fn normalize_device_preferences(
 /// audio records the default output. The saved preference is untouched, so it still migrates
 /// once the device is back.
 fn unresolved_start_device(index: usize, id: String, linux: bool) -> Result<Option<String>, String> {
-    let role = if index == 0 { "microphone" } else { "system-audio" };
+    let role = if index == 0 { "麦克风" } else { "系统声音" };
     if linux {
         return Err(format!(
-            "Your saved {} selection needs updating. Choose a device in Recording Settings.",
+            "你保存的{}选择需要更新，请在录音设置中重新选择设备。",
             role
         ));
     }
@@ -920,8 +920,8 @@ mod device_preference_tests {
         let saved = || (Some("AirPods (input)".to_string()), Some("BlackHole (output)".to_string()));
 
         let (mic, system) = saved();
-        assert!(prefs.start_device_selection(mic, system, true).unwrap_err().contains("microphone"));
-        assert!(prefs.start_device_selection(None, saved().1, true).unwrap_err().contains("system-audio"));
+        assert!(prefs.start_device_selection(mic, system, true).unwrap_err().contains("麦克风"));
+        assert!(prefs.start_device_selection(None, saved().1, true).unwrap_err().contains("系统声音"));
 
         let (mic, system) = saved();
         assert_eq!(

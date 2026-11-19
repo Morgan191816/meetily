@@ -156,11 +156,11 @@ async fn fetch_model_info(
         .await
         .map_err(|e| {
             if e.is_timeout() {
-                format!("Request timed out while fetching metadata for {}", model_name)
+                format!("获取 {} 的元数据时请求超时", model_name)
             } else if e.is_connect() {
-                format!("Cannot connect to {}. Ollama server may not be running.", base_url)
+                format!("无法连接到 {}。Ollama 服务可能未运行。", base_url)
             } else {
-                format!("Network error: {}", e)
+                format!("网络错误：{}", e)
             }
         })?;
 
@@ -172,7 +172,7 @@ async fn fetch_model_info(
     let show_response: OllamaShowResponse = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse API response: {}", e))?;
+        .map_err(|e| format!("解析接口响应失败：{}", e))?;
 
     // Try to get context size from model_info (verbose mode) first
     let mut context_size = extract_context_from_model_info(&show_response.model_info, &show_response.details.family);

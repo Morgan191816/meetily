@@ -78,9 +78,8 @@ test('owner completion waits for the native stop and preserves errors', async ()
 });
 
 for (const message of [
-  'Your saved audio selection needs updating. Choose a device in Recording Settings.',
-  'Your saved microphone selection needs updating. Choose a device in Recording Settings.',
-  'Your saved system-audio selection needs updating. Choose a device in Recording Settings.',
+  '你保存的麦克风选择需要更新，请在录音设置中重新选择设备。',
+  '你保存的系统声音选择需要更新，请在录音设置中重新选择设备。',
 ]) {
   test(`Start preserves migration repair guidance: ${message}`, async () => {
     await act(async () => {

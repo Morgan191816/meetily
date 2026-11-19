@@ -104,7 +104,7 @@ pub async fn api_save_meeting_summary<R: Runtime>(
         meeting_id
     );
     if !summary_is_renderable(&summary) {
-        return Err("Summary contains no visible content or model reasoning markers and was not saved.".into());
+        return Err("纪要中没有可见内容或模型推理标记，因此未保存。".into());
     }
     let pool = state.db_manager.pool();
 
@@ -113,7 +113,7 @@ pub async fn api_save_meeting_summary<R: Runtime>(
         Ok(true) => {
             log_info!("Summary saved successfully for meeting_id: {}", meeting_id);
             Ok(serde_json::json!({
-                "message": "Meeting summary saved successfully"
+                "message": "会议纪要已保存"
             }))
         }
         Ok(false) => {
@@ -236,8 +236,8 @@ async fn resolve_meeting_folder(
 ) -> Result<MeetingFolderResolution, String> {
     let meeting = MeetingsRepository::get_meeting_metadata(pool, meeting_id)
         .await
-        .map_err(|e| format!("Failed to load meeting metadata: {}", e))?
-        .ok_or_else(|| format!("Meeting not found: {}", meeting_id))?;
+        .map_err(|e| format!("加载会议元数据失败：{}", e))?
+        .ok_or_else(|| format!("未找到会议：{}", meeting_id))?;
 
     let Some(folder_path) = meeting.folder_path.filter(|p| !p.trim().is_empty()) else {
         return Ok(MeetingFolderResolution::NoFolder);
@@ -386,7 +386,7 @@ pub async fn api_get_summary<R: Runtime>(
             if status == "completed" && !data.as_ref().is_some_and(summary_is_renderable) {
                 status = "error".to_string();
                 error = Some(
-                    "Stored summary data is missing or invalid. Generate the summary again."
+                    "已保存的纪要数据缺失或无效，请重新生成纪要。"
                         .to_string(),
                 );
                 data = None;
@@ -450,7 +450,7 @@ pub async fn api_get_summary<R: Runtime>(
         }
         Err(e) => {
             log_error!("Error retrieving summary for {}: {}", meeting_id, e);
-            Err(format!("Failed to retrieve summary: {}", e))
+            Err(format!("获取纪要失败：{}", e))
         }
     }
 }
@@ -497,7 +497,7 @@ pub async fn api_process_transcript<R: Runtime>(
     let started_at = next_summary_start(Utc::now());
     SummaryProcessesRepository::create_or_reset_process(&pool, &m_id, started_at)
         .await
-        .map_err(|e| format!("Failed to initialize process: {}", e))?;
+        .map_err(|e| format!("初始化纪要生成流程失败：{}", e))?;
 
     let chunk_size = _chunk_size.unwrap_or(40000);
     let overlap = _overlap.unwrap_or(1000);
@@ -512,7 +512,7 @@ pub async fn api_process_transcript<R: Runtime>(
     )
     .await
     {
-        let message = format!("Failed to save transcript data: {}", error);
+        let message = format!("保存逐字稿数据失败：{}", error);
         let _ = SummaryProcessesRepository::update_process_failed(
             &pool,
             &m_id,
@@ -561,7 +561,7 @@ pub async fn api_cancel_summary<R: Runtime>(
     process_id: String,
 ) -> Result<serde_json::Value, String> {
     let started_at = DateTime::parse_from_rfc3339(&process_id)
-        .map_err(|_| "Invalid summary process ID".to_string())?
+        .map_err(|_| "纪要流程 ID 无效".to_string())?
         .with_timezone(&Utc);
     log_info!("api_cancel_summary called for meeting_id: {}", meeting_id);
 
@@ -581,7 +581,7 @@ pub async fn api_cancel_summary<R: Runtime>(
             }
             Err(error) => {
                 log_error!("Failed to update cancellation status for {}: {}", meeting_id, error);
-                return Err(format!("Failed to update cancellation status: {}", error));
+                return Err(format!("更新取消状态失败：{}", error));
             }
         }
     } else {

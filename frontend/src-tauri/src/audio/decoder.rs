@@ -214,7 +214,7 @@ fn chunked_resample_with_progress(
             }
             callback(
                 progress_pct as u32,
-                &format!("Resampling audio: {:.0}%", progress_pct),
+                &format!("正在重采样音频：{:.0}%", progress_pct),
             );
         }
     }
@@ -309,7 +309,7 @@ fn convert_to_wav_with_ffmpeg(
     );
 
     if let Some(cb) = progress_callback {
-        cb(0, "Converting audio format with FFmpeg...");
+        cb(0, "正在使用 FFmpeg 转换音频格式…");
     }
 
     let input_str = input_path
@@ -377,7 +377,7 @@ fn convert_to_wav_with_ffmpeg(
     }
 
     if let Some(cb) = progress_callback {
-        cb(100, "FFmpeg conversion complete");
+        cb(100, "FFmpeg 转换完成");
     }
 
     info!(
@@ -551,7 +551,7 @@ pub fn decode_audio_file_with_progress(
                     let current_progress = ((all_samples.len() as f64 / expected as f64) * 100.0) as u32;
                     if current_progress >= last_progress + 10 && current_progress <= 100 {
                         last_progress = current_progress;
-                        callback(current_progress, &format!("Decoding audio: {}%", current_progress));
+                        callback(current_progress, &format!("正在解码音频：{}%", current_progress));
                     }
                 }
             }
@@ -564,7 +564,7 @@ pub fn decode_audio_file_with_progress(
 
     // Ensure we report 100% completion
     if let Some(callback) = &progress_callback {
-        callback(100, "Decoding complete");
+        callback(100, "解码完成");
     }
 
     if all_samples.is_empty() {

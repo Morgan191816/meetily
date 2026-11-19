@@ -73,18 +73,18 @@ impl AudioError {
     /// Get user-friendly error message
     pub fn user_message(&self) -> &str {
         match self {
-            AudioError::DeviceDisconnected => "Audio device was disconnected",
-            AudioError::StreamFailed => "Audio stream encountered an error",
+            AudioError::DeviceDisconnected => "音频设备已断开连接",
+            AudioError::StreamFailed => "音频流发生错误",
             #[cfg(target_os = "linux")]
             AudioError::LinuxCapture(message) => message,
-            AudioError::ProcessingFailed => "Audio processing failed",
-            AudioError::TranscriptionFailed => "Speech transcription failed",
-            AudioError::ChannelClosed => "Audio channel was closed unexpectedly",
-            AudioError::InitializationFailed => "Failed to initialize audio system",
-            AudioError::ConfigurationError => "Audio configuration error",
-            AudioError::PermissionDenied => "Microphone permission denied",
-            AudioError::BufferOverflow => "Audio buffer overflow",
-            AudioError::SampleRateUnsupported => "Audio sample rate not supported",
+            AudioError::ProcessingFailed => "音频处理失败",
+            AudioError::TranscriptionFailed => "语音转写失败",
+            AudioError::ChannelClosed => "音频通道意外关闭",
+            AudioError::InitializationFailed => "音频系统初始化失败",
+            AudioError::ConfigurationError => "音频配置错误",
+            AudioError::PermissionDenied => "麦克风权限被拒绝",
+            AudioError::BufferOverflow => "音频缓冲区溢出",
+            AudioError::SampleRateUnsupported => "不支持该音频采样率",
         }
     }
 }

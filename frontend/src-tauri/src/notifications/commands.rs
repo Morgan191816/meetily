@@ -38,7 +38,7 @@ pub async fn get_notification_settings(
     if let Some(manager) = manager_lock.as_ref() {
         Ok(manager.get_settings().await)
     } else {
-        Err("Notification manager not initialized".to_string())
+        Err("通知管理器未初始化".to_string())
     }
 }
 
@@ -53,9 +53,9 @@ pub async fn set_notification_settings(
     let manager_lock = manager_state.read().await;
     if let Some(manager) = manager_lock.as_ref() {
         manager.update_settings(settings).await
-            .map_err(|e| format!("Failed to update settings: {}", e))
+            .map_err(|e| format!("更新设置失败：{}", e))
     } else {
-        Err("Notification manager not initialized".to_string())
+        Err("通知管理器未初始化".to_string())
     }
 }
 
@@ -69,9 +69,9 @@ pub async fn request_notification_permission(
     let manager_lock = manager_state.read().await;
     if let Some(manager) = manager_lock.as_ref() {
         manager.request_permission().await
-            .map_err(|e| format!("Failed to request permission: {}", e))
+            .map_err(|e| format!("请求权限失败：{}", e))
     } else {
-        Err("Notification manager not initialized".to_string())
+        Err("通知管理器未初始化".to_string())
     }
 }
 
@@ -89,9 +89,9 @@ pub async fn show_notification(
     let manager_lock = manager_state.read().await;
     if let Some(manager) = manager_lock.as_ref() {
         manager.show_notification(notification).await
-            .map_err(|e| format!("Failed to show notification: {}", e))
+            .map_err(|e| format!("显示通知失败：{}", e))
     } else {
-        Err("Notification manager not initialized".to_string())
+        Err("通知管理器未初始化".to_string())
     }
 }
 
@@ -105,9 +105,9 @@ pub async fn show_test_notification(
     let manager_lock = manager_state.read().await;
     if let Some(manager) = manager_lock.as_ref() {
         manager.show_test_notification().await
-            .map_err(|e| format!("Failed to show test notification: {}", e))
+            .map_err(|e| format!("显示测试通知失败：{}", e))
     } else {
-        Err("Notification manager not initialized".to_string())
+        Err("通知管理器未初始化".to_string())
     }
 }
 
@@ -120,7 +120,7 @@ pub async fn is_dnd_active(
     if let Some(manager) = manager_lock.as_ref() {
         Ok(manager.is_dnd_active().await)
     } else {
-        Err("Notification manager not initialized".to_string())
+        Err("通知管理器未初始化".to_string())
     }
 }
 
@@ -133,7 +133,7 @@ pub async fn get_system_dnd_status(
     if let Some(manager) = manager_lock.as_ref() {
         Ok(manager.get_system_dnd_status().await)
     } else {
-        Err("Notification manager not initialized".to_string())
+        Err("通知管理器未初始化".to_string())
     }
 }
 
@@ -148,9 +148,9 @@ pub async fn set_manual_dnd(
     let manager_lock = manager_state.read().await;
     if let Some(manager) = manager_lock.as_ref() {
         manager.set_manual_dnd(enabled).await
-            .map_err(|e| format!("Failed to set manual DND: {}", e))
+            .map_err(|e| format!("设置手动免打扰失败：{}", e))
     } else {
-        Err("Notification manager not initialized".to_string())
+        Err("通知管理器未初始化".to_string())
     }
 }
 
@@ -165,9 +165,9 @@ pub async fn set_notification_consent(
     let manager_lock = manager_state.read().await;
     if let Some(manager) = manager_lock.as_ref() {
         manager.set_consent(consent).await
-            .map_err(|e| format!("Failed to set consent: {}", e))
+            .map_err(|e| format!("设置通知授权失败：{}", e))
     } else {
-        Err("Notification manager not initialized".to_string())
+        Err("通知管理器未初始化".to_string())
     }
 }
 
@@ -181,9 +181,9 @@ pub async fn clear_notifications(
     let manager_lock = manager_state.read().await;
     if let Some(manager) = manager_lock.as_ref() {
         manager.clear_notifications().await
-            .map_err(|e| format!("Failed to clear notifications: {}", e))
+            .map_err(|e| format!("清除通知失败：{}", e))
     } else {
-        Err("Notification manager not initialized".to_string())
+        Err("通知管理器未初始化".to_string())
     }
 }
 
@@ -224,7 +224,7 @@ pub async fn initialize_notification_manager_manual(
         }
         Err(e) => {
             log_error!("Failed to initialize notification manager manually: {}", e);
-            Err(format!("Failed to initialize notification manager: {}", e))
+            Err(format!("初始化通知管理器失败：{}", e))
         }
     }
 }
@@ -242,7 +242,7 @@ pub async fn test_notification_with_auto_consent(
     if manager_lock.is_none() {
         drop(manager_lock);
         if let Err(e) = initialize_notification_manager_manual(app.clone(), manager_state.clone()).await {
-            return Err(format!("Failed to initialize manager: {}", e));
+            return Err(format!("初始化管理器失败：{}", e));
         }
     } else {
         drop(manager_lock);
@@ -261,9 +261,9 @@ pub async fn test_notification_with_auto_consent(
 
         // Show test notification
         manager.show_test_notification().await
-            .map_err(|e| format!("Failed to show test notification: {}", e))
+            .map_err(|e| format!("显示测试通知失败：{}", e))
     } else {
-        Err("Manager still not initialized".to_string())
+        Err("管理器仍未初始化".to_string())
     }
 }
 
@@ -276,9 +276,9 @@ pub async fn get_notification_stats(
     if let Some(manager) = manager_lock.as_ref() {
         let stats = manager.get_stats().await;
         serde_json::to_value(stats)
-            .map_err(|e| format!("Failed to serialize stats: {}", e))
+            .map_err(|e| format!("序列化统计信息失败：{}", e))
     } else {
-        Err("Notification manager not initialized".to_string())
+        Err("通知管理器未初始化".to_string())
     }
 }
 
@@ -337,8 +337,8 @@ pub async fn show_recording_started_notification<R: Runtime>(
                 // Fallback: Use Tauri's notification API directly
                 let title = "Morgan Meet";
                 let body = match meeting_name {
-                    Some(name) => format!("Recording started for meeting: {}", name),
-                    None => "Recording has started. Please inform others in the meeting that you are recording.".to_string(),
+                    Some(name) => format!("会议「{}」开始录音", name),
+                    None => "录音已开始。请告知会议中的其他参会者你正在录音。".to_string(),
                 };
 
                 log_info!("Notification fallback; type=recording_started, outcome=attempting");
@@ -354,7 +354,7 @@ pub async fn show_recording_started_notification<R: Runtime>(
                     }
                     Err(_e) => {
                         log_error!("Notification fallback; type=recording_started, outcome=failed");
-                        Err(anyhow::anyhow!("Failed to show notification: {}", _e))
+                        Err(anyhow::anyhow!("显示通知失败：{}", _e))
                     }
                 }
             }
@@ -386,7 +386,7 @@ pub async fn show_recording_stopped_notification<R: Runtime>(
 
         // Use direct Tauri notification as fallback for stop notification
         let title = "Morgan Meet";
-        let body = "Recording has stopped";
+        let body = "录音已停止";
 
         log_info!("Notification fallback; type=recording_stopped, outcome=attempting");
 
@@ -401,7 +401,7 @@ pub async fn show_recording_stopped_notification<R: Runtime>(
             }
             Err(e) => {
                 log_error!("Notification fallback; type=recording_stopped, outcome=failed");
-                Err(anyhow::anyhow!("Failed to show notification: {}", e))
+                Err(anyhow::anyhow!("显示通知失败：{}", e))
             }
         }
     }

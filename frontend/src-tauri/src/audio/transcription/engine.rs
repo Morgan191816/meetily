@@ -90,7 +90,7 @@ pub async fn validate_transcription_model_ready<R: Runtime>(app: &AppHandle<R>) 
             if let Err(init_error) = crate::whisper_engine::commands::whisper_init().await {
                 warn!("❌ Failed to initialize Whisper engine: {}", init_error);
                 return Err(format!(
-                    "Failed to initialize speech recognition: {}",
+                    "语音识别初始化失败：{}",
                     init_error
                 ));
             }
@@ -110,7 +110,7 @@ pub async fn validate_transcription_model_ready<R: Runtime>(app: &AppHandle<R>) 
         other => {
             warn!("❌ Unsupported transcription provider for local recording: {}", other);
             Err(format!(
-                "Provider '{}' is not supported for local transcription. Please select 'localWhisper'.",
+                "提供方「{}」不支持本地转写，请选择「localWhisper」。",
                 other
             ))
         }
@@ -256,7 +256,7 @@ pub async fn get_or_init_whisper<R: Runtime>(
 
     // First ensure the engine is initialized
     if let Err(e) = crate::whisper_engine::commands::whisper_init().await {
-        return Err(format!("Failed to initialize Whisper engine: {}", e));
+        return Err(format!("Whisper 引擎初始化失败：{}", e));
     }
 
     // Get the engine reference
@@ -267,7 +267,7 @@ pub async fn get_or_init_whisper<R: Runtime>(
         engine_guard
             .as_ref()
             .cloned()
-            .ok_or("Failed to get initialized engine")?
+            .ok_or("无法获取已初始化的引擎")?
     };
 
     // Get model configuration from API
@@ -286,7 +286,7 @@ pub async fn get_or_init_whisper<R: Runtime>(
                 } else {
                     // Non-Whisper provider - this function shouldn't be called
                     return Err(format!(
-                        "Cannot initialize Whisper engine: Config uses '{}' provider. This is a bug in the transcription task initialization.",
+                        "无法初始化 Whisper 引擎：配置使用「{}」提供方。这是转写任务初始化中的内部错误。",
                         config.provider
                     ));
                 }
@@ -310,7 +310,7 @@ pub async fn get_or_init_whisper<R: Runtime>(
     let models = engine
         .discover_models()
         .await
-        .map_err(|e| format!("Failed to discover models: {}", e))?;
+        .map_err(|e| format!("无法发现模型：{}", e))?;
 
     info!("Discovered {} models", models.len());
     for model in &models {
@@ -341,23 +341,23 @@ pub async fn get_or_init_whisper<R: Runtime>(
                     engine
                         .load_model(&model_to_load)
                         .await
-                        .map_err(|e| format!("Failed to load model '{}': {}", model_to_load, e))?;
+                        .map_err(|e| format!("模型「{}」加载失败：{}", model_to_load, e))?;
                     info!("✅ Model '{}' loaded successfully", model_to_load);
                 }
                 crate::whisper_engine::ModelStatus::Missing => {
                     return Err(format!(
-                        "Model '{}' is not downloaded. Please download it first from the settings.",
+                        "模型「{}」尚未下载，请先在设置中下载。",
                         model_to_load
                     ));
                 }
                 crate::whisper_engine::ModelStatus::Downloading { progress } => {
-                    return Err(format!("Model '{}' is currently downloading ({}%). Please wait for it to complete.", model_to_load, progress));
+                    return Err(format!("模型「{}」正在下载（{}%），请等待下载完成。", model_to_load, progress));
                 }
                 crate::whisper_engine::ModelStatus::Error(ref err) => {
-                    return Err(format!("Model '{}' has an error: {}. Please check the model or try downloading it again.", model_to_load, err));
+                    return Err(format!("模型「{}」出现错误：{}。请检查该模型或重新下载。", model_to_load, err));
                 }
                 crate::whisper_engine::ModelStatus::Corrupted { .. } => {
-                    return Err(format!("Model '{}' is corrupted. Please delete it and download again from the settings.", model_to_load));
+                    return Err(format!("模型「{}」已损坏，请在设置中删除后重新下载。", model_to_load));
                 }
             }
         }
@@ -375,7 +375,7 @@ pub async fn get_or_init_whisper<R: Runtime>(
                 );
                 engine.load_model(&fallback_model.name).await.map_err(|e| {
                     format!(
-                        "Failed to load fallback model '{}': {}",
+                        "备用模型「{}」加载失败：{}",
                         fallback_model.name, e
                     )
                 })?;
@@ -384,7 +384,7 @@ pub async fn get_or_init_whisper<R: Runtime>(
                     fallback_model.name
                 );
             } else {
-                return Err(format!("Model '{}' is not supported and no other models are available. Please download a model from the settings.", model_to_load));
+                return Err(format!("模型「{}」不受支持，且没有其他可用模型。请在设置中下载模型。", model_to_load));
             }
         }
     }

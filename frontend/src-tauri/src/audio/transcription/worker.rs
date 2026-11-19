@@ -191,7 +191,7 @@ pub fn start_transcription_task<R: Runtime>(
                 error!("Failed to initialize transcription engine");
                 let _ = app.emit("transcription-error", serde_json::json!({
                     "error": e,
-                    "userMessage": "Recording failed: Unable to initialize speech recognition. Please check your model settings.",
+                    "userMessage": "录音失败：无法初始化语音识别，请检查模型设置。",
                     "actionable": true,
                     "phase": "active"
                 }));
@@ -258,7 +258,7 @@ pub fn start_transcription_task<R: Runtime>(
                                             .emit(
                                                 "speech-detected",
                                                 serde_json::json!({
-                                                    "message": "Speech activity detected"
+                                                    "message": "检测到语音活动"
                                                 }),
                                             )
                                             .is_err()
@@ -387,7 +387,7 @@ pub fn start_transcription_task<R: Runtime>(
                     "chunks_queued": final_queued,
                     "chunks_completed": final_completed,
                     "chunks_lost": final_queued - final_completed,
-                    "message": "Some transcript chunks may have been lost during shutdown"
+                    "message": "应用关闭时有部分逐字稿片段可能丢失"
                 }),
             );
         }
@@ -435,7 +435,7 @@ async fn transcribe_chunk_with_provider<R: Runtime>(
                         "transcription-error",
                         &serde_json::json!({
                             "error": transcription_error.to_string(),
-                            "userMessage": format!("Transcription failed: {}", transcription_error),
+                            "userMessage": format!("转写失败：{}", transcription_error),
                             "actionable": false,
                             "phase": "active"
                         }),
@@ -457,7 +457,7 @@ async fn transcribe_chunk_with_provider<R: Runtime>(
                         "transcription-error",
                         &serde_json::json!({
                             "error": error.to_string(),
-                            "userMessage": format!("Transcription failed: {}", error),
+                            "userMessage": format!("转写失败：{}", error),
                             "actionable": false,
                             "phase": "active"
                         }),
