@@ -1,18 +1,18 @@
 // Retranscription module - allows re-processing stored audio with different settings
 
 use crate::audio::decoder::decode_audio_file;
+use crate::audio::transcription::{
+    get_or_init_transcription_engine, TranscriptResult, TranscriptionEngine,
+};
 use crate::audio::vad::get_speech_chunks_with_progress;
 use super::common::{create_transcript_segments, split_segment_at_silence, write_transcripts_json};
 use super::constants::AUDIO_EXTENSIONS;
-use crate::config::DEFAULT_WHISPER_MODEL;
 use crate::state::AppState;
-use crate::whisper_engine::WhisperEngine;
 use anyhow::{anyhow, Result};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 /// Global flag to track if retranscription is in progress
@@ -294,9 +294,9 @@ async fn run_retranscription<R: Runtime>(
 
     emit_progress(&app, &meeting_id, "transcribing", 25, "正在加载转写引擎…");
 
-    // Initialize the engine once (not per-segment)
-    let whisper_engine = if total_segments > 0 {
-        Some(get_or_init_whisper(&app, model.as_deref()).await?)
+    // Initialize the configured engine once (not per-segment)
+    let engine = if total_segments > 0 {
+        Some(get_or_init_transcription_engine(&app).await.map_err(|e| anyhow!(e))?)
     } else {
         None
     };
@@ -329,6 +329,7 @@ async fn run_retranscription<R: Runtime>(
     // Process each speech segment with progress updates
     let mut all_transcripts: Vec<(String, f64, f64)> = Vec::new(); // (text, start_ms, end_ms)
     let mut total_confidence = 0.0f32;
+    let mut confidence_count = 0usize;
 
     for (i, segment) in processable_segments.iter().enumerate() {
         // Check for cancellation before each segment
@@ -358,37 +359,50 @@ async fn run_retranscription<R: Runtime>(
             continue;
         }
 
-        // Transcribe this segment
-        let engine = whisper_engine.as_ref().unwrap();
-        let (text, conf, _) = engine
-            .transcribe_audio_with_confidence(segment.samples.clone(), language.clone())
-            .await
-            .map_err(|e| anyhow!("Whisper transcription failed on segment {}: {}", i, e))?;
+        // Transcribe this segment with the configured engine (Whisper or provider)
+        let engine = engine.as_ref().unwrap();
+        let result = match engine {
+            TranscriptionEngine::Whisper(e) => e
+                .transcribe_audio_with_confidence(segment.samples.clone(), language.clone())
+                .await
+                .map(|(text, conf, partial)| TranscriptResult {
+                    text,
+                    confidence: Some(conf),
+                    is_partial: partial,
+                })
+                .map_err(|e| anyhow!("Whisper transcription failed on segment {}: {}", i, e))?,
+            TranscriptionEngine::Provider(p) => p
+                .transcribe(segment.samples.clone(), language.clone())
+                .await
+                .map_err(|e| anyhow!("Transcription failed on segment {}: {}", i, e))?,
+        };
 
         // Skip empty transcripts
+        let text = result.text;
         let trimmed = text.trim();
         if !trimmed.is_empty() {
             debug!(
-                "Segment {}/{}: {:.1}s, conf={:.2}, text='{}'",
-                i + 1, processable_count, segment_duration_sec, conf,
+                "Segment {}/{}: {:.1}s, conf={:?}, text='{}'",
+                i + 1, processable_count, segment_duration_sec, result.confidence,
                 if trimmed.len() > 80 { let mut end = 80; while !trimmed.is_char_boundary(end) { end -= 1; } &trimmed[..end] } else { trimmed }
             );
             all_transcripts.push((text, segment.start_timestamp_ms, segment.end_timestamp_ms));
-            total_confidence += conf;
+            if let Some(conf) = result.confidence {
+                total_confidence += conf;
+                confidence_count += 1;
+            }
         } else {
             debug!("Segment {}/{}: {:.1}s — empty transcription", i + 1, processable_count, segment_duration_sec);
         }
     }
 
     let transcribed_count = all_transcripts.len();
-    let avg_confidence = if transcribed_count > 0 {
-        total_confidence / transcribed_count as f32
-    } else {
-        0.0
-    };
+    // SenseVoice 不返回置信度（confidence: None），此时平均置信度如实记为 None，不伪造 0。
+    let avg_confidence = (confidence_count > 0)
+        .then(|| total_confidence / confidence_count as f32);
 
     info!(
-        "Transcription complete: {} segments transcribed out of {}, avg confidence: {:.2}",
+        "Transcription complete: {} segments transcribed out of {}, avg confidence: {:?}",
         transcribed_count, processable_count, avg_confidence
     );
 
@@ -496,111 +510,6 @@ fn emit_progress<R: Runtime>(
             message: message.to_string(),
         },
     );
-}
-
-/// Get or initialize the Whisper engine, auto-loading the model if needed
-/// If `requested_model` is provided, ensures that specific model is loaded
-async fn get_or_init_whisper<R: Runtime>(
-    app: &AppHandle<R>,
-    requested_model: Option<&str>,
-) -> Result<Arc<WhisperEngine>> {
-    use crate::whisper_engine::commands::WHISPER_ENGINE;
-
-    let engine = {
-        let guard = WHISPER_ENGINE.lock().unwrap_or_else(|e| e.into_inner());
-        guard.as_ref().cloned()
-    };
-
-    match engine {
-        Some(e) => {
-            // Determine which model to use
-            let target_model = match requested_model {
-                Some(model) => model.to_string(),
-                None => get_configured_whisper_model(app).await?,
-            };
-
-            // Check if the correct model is already loaded
-            let current_model = e.get_current_model().await;
-            let needs_load = match &current_model {
-                Some(loaded) => loaded != &target_model,
-                None => true,
-            };
-
-            if needs_load {
-                info!(
-                    "Loading Whisper model '{}' (current: {:?})",
-                    target_model, current_model
-                );
-
-                // Discover available models first (populates the internal cache)
-                info!("Discovering available Whisper models...");
-                if let Err(discover_err) = e.discover_models().await {
-                    warn!("Error during model discovery (continuing anyway): {}", discover_err);
-                }
-
-                match e.load_model(&target_model).await {
-                    Ok(_) => {
-                        info!("Whisper model '{}' loaded successfully", target_model);
-                        Ok(e)
-                    }
-                    Err(load_err) => {
-                        error!("Failed to load Whisper model '{}': {}", target_model, load_err);
-                        Err(anyhow!("Failed to load Whisper model '{}': {}", target_model, load_err))
-                    }
-                }
-            } else {
-                info!("Whisper model '{}' already loaded", target_model);
-                Ok(e)
-            }
-        }
-        None => Err(anyhow!("Whisper engine not initialized")),
-    }
-}
-
-/// Get the configured Whisper model name from the database
-async fn get_configured_whisper_model<R: Runtime>(app: &AppHandle<R>) -> Result<String> {
-    debug!("Getting configured Whisper model from database...");
-
-    let app_state = app
-        .try_state::<AppState>()
-        .ok_or_else(|| {
-            error!("App state not available");
-            anyhow!("App state not available")
-        })?;
-
-    debug!("Querying transcript_settings table...");
-
-    // get_transcript_config normalizes legacy providers (e.g. parakeet) to localWhisper
-    let setting = crate::database::repositories::setting::SettingsRepository::get_transcript_config(
-        app_state.db_manager.pool(),
-    )
-    .await
-    .map_err(|e| {
-        error!("Failed to query transcript config: {}", e);
-        anyhow!("Failed to query transcript config: {}", e)
-    })?;
-
-    match setting {
-        Some(setting) => {
-            info!(
-                "Found transcript config: provider={}, model={}",
-                setting.provider, setting.model
-            );
-
-            // Check if provider is Whisper-based
-            if setting.provider == "localWhisper" || setting.provider == "whisper" {
-                Ok(setting.model)
-            } else {
-                error!("Retranscription requires Whisper provider, but configured provider is: {}", setting.provider);
-                Err(anyhow!("重新转写需要 Whisper。当前提供方「{}」不支持带语言选择的重新转写。", setting.provider))
-            }
-        },
-        None => {
-            // Default to configured Whisper model if no config exists
-            warn!("No transcript config found, using default model '{}'", DEFAULT_WHISPER_MODEL);
-            Ok(DEFAULT_WHISPER_MODEL.to_string())
-        }
-    }
 }
 
 /// Write or update metadata.json for retranscription (preserves existing fields, adds retranscribed_at)
@@ -816,6 +725,22 @@ mod tests {
     fn test_vad_redemption_time_constant() {
         // Batch processing uses 2000ms to bridge natural pauses in full-file VAD
         assert_eq!(VAD_REDEMPTION_TIME_MS, 2000);
+    }
+
+    #[test]
+    fn configured_provider_is_respected_for_batch() {
+        use crate::audio::transcription::engine::{engine_kind_for_provider, EngineKind};
+
+        // 批量路径按 provider 分派：不再硬编码 Whisper，未知 provider 报错而不是静默回退。
+        assert!(matches!(
+            engine_kind_for_provider("senseVoice"),
+            Ok(EngineKind::Provider)
+        ));
+        assert!(matches!(
+            engine_kind_for_provider("localWhisper"),
+            Ok(EngineKind::Whisper)
+        ));
+        assert!(engine_kind_for_provider("unknown").is_err());
     }
 
     #[test]

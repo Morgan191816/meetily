@@ -2,16 +2,16 @@
 
 use crate::api::TranscriptSegment;
 use crate::audio::decoder::{decode_audio_file, decode_audio_file_with_progress};
+use crate::audio::transcription::{
+    get_or_init_transcription_engine, TranscriptResult, TranscriptionEngine,
+};
 use crate::audio::vad::get_speech_chunks_with_progress;
-use crate::config::DEFAULT_WHISPER_MODEL;
 use crate::state::AppState;
-use crate::whisper_engine::WhisperEngine;
 use anyhow::{anyhow, Result};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
@@ -502,9 +502,9 @@ async fn run_import<R: Runtime>(
 
     emit_progress(&app, "transcribing", 30, "正在加载转写引擎…");
 
-    // Initialize the Whisper engine
-    let whisper_engine = if total_segments > 0 {
-        Some(get_or_init_whisper(&app, model.as_deref()).await?)
+    // Initialize the configured engine
+    let engine = if total_segments > 0 {
+        Some(get_or_init_transcription_engine(&app).await.map_err(|e| anyhow!(e))?)
     } else {
         None
     };
@@ -537,6 +537,7 @@ async fn run_import<R: Runtime>(
     // Process each speech segment
     let mut all_transcripts: Vec<(String, f64, f64)> = Vec::new();
     let mut total_confidence = 0.0f32;
+    let mut confidence_count = 0usize;
 
     for (i, segment) in processable_segments.iter().enumerate() {
         if IMPORT_CANCELLED.load(Ordering::SeqCst) {
@@ -568,36 +569,49 @@ async fn run_import<R: Runtime>(
             continue;
         }
 
-        // Transcribe
-        let engine = whisper_engine.as_ref().unwrap();
-        let (text, conf, _) = engine
-            .transcribe_audio_with_confidence(segment.samples.clone(), language.clone())
-            .await
-            .map_err(|e| anyhow!("第 {} 段 Whisper 转写失败：{}", i, e))?;
+        // Transcribe with the configured engine (Whisper or provider)
+        let engine = engine.as_ref().unwrap();
+        let result = match engine {
+            TranscriptionEngine::Whisper(e) => e
+                .transcribe_audio_with_confidence(segment.samples.clone(), language.clone())
+                .await
+                .map(|(text, conf, partial)| TranscriptResult {
+                    text,
+                    confidence: Some(conf),
+                    is_partial: partial,
+                })
+                .map_err(|e| anyhow!("第 {} 段 Whisper 转写失败：{}", i, e))?,
+            TranscriptionEngine::Provider(p) => p
+                .transcribe(segment.samples.clone(), language.clone())
+                .await
+                .map_err(|e| anyhow!("第 {} 段转写失败：{}", i, e))?,
+        };
 
+        let text = result.text;
         let trimmed = text.trim();
         if !trimmed.is_empty() {
             debug!(
-                "Segment {}/{}: {:.1}s, conf={:.2}, text='{}'",
-                i + 1, processable_count, segment_duration_sec, conf,
+                "Segment {}/{}: {:.1}s, conf={:?}, text='{}'",
+                i + 1, processable_count, segment_duration_sec, result.confidence,
                 if trimmed.len() > 80 { let mut end = 80; while !trimmed.is_char_boundary(end) { end -= 1; } &trimmed[..end] } else { trimmed }
             );
             all_transcripts.push((text, segment.start_timestamp_ms, segment.end_timestamp_ms));
-            total_confidence += conf;
+            if let Some(conf) = result.confidence {
+                total_confidence += conf;
+                confidence_count += 1;
+            }
         } else {
             debug!("Segment {}/{}: {:.1}s — empty transcription", i + 1, processable_count, segment_duration_sec);
         }
     }
 
     let transcribed_count = all_transcripts.len();
-    let avg_confidence = if transcribed_count > 0 {
-        total_confidence / transcribed_count as f32
-    } else {
-        0.0
-    };
+    // SenseVoice 不返回置信度（confidence: None），此时平均置信度如实记为 None，不伪造 0。
+    let avg_confidence = (confidence_count > 0)
+        .then(|| total_confidence / confidence_count as f32);
 
     info!(
-        "Transcription complete: {} segments transcribed out of {}, avg confidence: {:.2}",
+        "Transcription complete: {} segments transcribed out of {}, avg confidence: {:?}",
         transcribed_count, processable_count, avg_confidence
     );
 
@@ -725,77 +739,6 @@ async fn create_meeting_with_transcripts(
     );
 
     Ok(meeting_id)
-}
-
-/// Get or initialize the Whisper engine
-async fn get_or_init_whisper<R: Runtime>(
-    app: &AppHandle<R>,
-    requested_model: Option<&str>,
-) -> Result<Arc<WhisperEngine>> {
-    use crate::whisper_engine::commands::WHISPER_ENGINE;
-
-    let engine = {
-        let guard = WHISPER_ENGINE.lock().unwrap_or_else(|e| e.into_inner());
-        guard.as_ref().cloned()
-    };
-
-    match engine {
-        Some(e) => {
-            let target_model = match requested_model {
-                Some(model) => model.to_string(),
-                None => get_configured_model(app).await?,
-            };
-
-            let current_model = e.get_current_model().await;
-            let needs_load = match &current_model {
-                Some(loaded) => loaded != &target_model,
-                None => true,
-            };
-
-            if needs_load {
-                info!(
-                    "Loading Whisper model '{}' (current: {:?})",
-                    target_model, current_model
-                );
-
-                if let Err(e) = e.discover_models().await {
-                    warn!("Model discovery error (continuing): {}", e);
-                }
-
-                e.load_model(&target_model)
-                    .await
-                    .map_err(|e| anyhow!("模型「{}」加载失败：{}", target_model, e))?;
-            }
-
-            Ok(e)
-        }
-        None => Err(anyhow!("Whisper 引擎未初始化")),
-    }
-}
-
-/// Get the configured model from database
-async fn get_configured_model<R: Runtime>(app: &AppHandle<R>) -> Result<String> {
-    let app_state = app
-        .try_state::<AppState>()
-        .ok_or_else(|| anyhow!("应用状态不可用"))?;
-
-    let result: Option<(String, String)> = sqlx::query_as(
-        "SELECT provider, model FROM transcript_settings WHERE id = '1'",
-    )
-    .fetch_optional(app_state.db_manager.pool())
-    .await
-    .map_err(|e| anyhow!("查询配置失败：{}", e))?;
-
-    match result {
-        Some((provider, model)) => {
-            if provider == "localWhisper" || provider == "whisper" {
-                Ok(model)
-            } else {
-                Ok(DEFAULT_WHISPER_MODEL.to_string())
-            }
-        }
-        None => Ok(DEFAULT_WHISPER_MODEL.to_string()),
-    }
 }
 
 /// Write metadata.json to a meeting folder (atomic write with temp file)
