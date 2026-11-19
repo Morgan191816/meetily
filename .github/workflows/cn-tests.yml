@@ -22,23 +22,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # sherpa-onnx build.rs 默认下载的静态库是 /MT 编译的，与 whisper-rs 的 /MD 冲突（LNK2038/LNK2005）。
       # 改用官方 static-MD 包，并通过 SHERPA_ONNX_LIB_DIR 让 build.rs 跳过默认下载。
-      - name: Cache sherpa-onnx static (MD) libs
-        id: sherpa-libs
-        uses: actions/cache@v4
-        with:
-          path: sherpa-onnx-libs
-          key: sherpa-onnx-2.0.1-win-x64-static-MD-Release-lib
-      - name: Fetch sherpa-onnx static (MD) libs
-        if: steps.sherpa-libs.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          curl -sSL -o sherpa-md.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-v2.0.1-win-x64-static-MD-Release-lib.tar.bz2
-          mkdir -p sherpa-onnx-libs
-          tar xjf sherpa-md.tar.bz2 -C sherpa-onnx-libs --strip-components=1
-          rm sherpa-md.tar.bz2
-      - name: Point sherpa-onnx at the static (MD) libs
-        shell: bash
-        run: echo "SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/sherpa-onnx-libs/lib" >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-sherpa-onnx
       # test_get_output_device 需要真实音频输出设备，GitHub runner 上失败并让整个 lib 测试进程 AV 崩溃
       # runner 的 PATH 里另有一个 1.17.1 的 onnxruntime.dll，会让 ort(1.22.x) 初始化失败；
       # 把 build script 下载的 1.22 放到测试 exe 同目录，Windows 先搜应用目录再搜 PATH

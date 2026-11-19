@@ -173,6 +173,10 @@ jobs:
           prefix-key: ${{ runner.os == 'Windows' && 'windows-portable-v1' || (runner.os == 'Linux' && inputs.target == 'x86_64-unknown-linux-gnu' && 'linux-portable-v1') || 'v0-rust' }}
           key: ${{ inputs.platform }}-${{ inputs.target }}-vulkan-v2
 
+      # Windows-only: sherpa-onnx 静态库必须用 static-MD 包（/MT 与 whisper-rs 的 /MD 冲突）
+      - uses: ./.github/actions/setup-sherpa-onnx
+        if: contains(inputs.platform, 'windows')
+
       - name: install dependencies (ubuntu 22.04)
         if: contains(inputs.platform, 'ubuntu-22.04')
         run: |
