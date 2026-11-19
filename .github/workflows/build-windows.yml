@@ -530,12 +530,25 @@ jobs:
           prefix-key: windows-portable-v1
           key: windows-x64-vulkan-v2
 
-      # sherpa-onnx build.rs 首次构建会从 GitHub Releases 拉 ~117MB 静态库，缓存到 target/ 下
-      - name: Cache sherpa-onnx prebuilt libs
+      # sherpa-onnx build.rs 默认下载的静态库是 /MT 编译的，与 whisper-rs 的 /MD 冲突（LNK2038/LNK2005）。
+      # 改用官方 static-MD 包，并通过 SHERPA_ONNX_LIB_DIR 让 build.rs 跳过默认下载。
+      - name: Cache sherpa-onnx static (MD) libs
+        id: sherpa-libs
         uses: actions/cache@v4
         with:
-          path: target/sherpa-onnx-prebuilt
-          key: sherpa-onnx-2.0.1-win-x64-static
+          path: sherpa-onnx-libs
+          key: sherpa-onnx-2.0.1-win-x64-static-MD-Release-lib
+      - name: Fetch sherpa-onnx static (MD) libs
+        if: steps.sherpa-libs.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          curl -sSL -o sherpa-md.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-v2.0.1-win-x64-static-MD-Release-lib.tar.bz2
+          mkdir -p sherpa-onnx-libs
+          tar xjf sherpa-md.tar.bz2 -C sherpa-onnx-libs --strip-components=1
+          rm sherpa-md.tar.bz2
+      - name: Point sherpa-onnx at the static (MD) libs
+        shell: bash
+        run: echo "SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/sherpa-onnx-libs/lib" >> "$GITHUB_ENV"
 
       - name: Install Vulkan SDK
         uses: humbletim/install-vulkan-sdk@v1.2
