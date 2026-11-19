@@ -172,6 +172,19 @@ pub async fn import_and_initialize_database(
     Ok(())
 }
 
+/// Seed the transcript settings row every fresh install needs. Kept separate from
+/// `initialize_fresh_database` so the default provider can be tested without an AppHandle.
+async fn seed_default_transcript_config(
+    pool: &sqlx::SqlitePool,
+) -> std::result::Result<(), sqlx::Error> {
+    crate::database::repositories::setting::SettingsRepository::save_transcript_config(
+        pool,
+        crate::config::DEFAULT_TRANSCRIPTION_PROVIDER,
+        crate::config::DEFAULT_SENSEVOICE_MODEL,
+    )
+    .await
+}
+
 /// Initialize a fresh database (for users who don't want to import)
 #[tauri::command]
 pub async fn initialize_fresh_database(app: AppHandle) -> Result<(), String> {
@@ -202,12 +215,8 @@ pub async fn initialize_fresh_database(app: AppHandle) -> Result<(), String> {
         error!("Failed to set default summary model config: {}", e);
     }
 
-    // Default Transcription Model: Whisper
-    if let Err(e) = crate::database::repositories::setting::SettingsRepository::save_transcript_config(
-        pool,
-        "localWhisper",
-        crate::config::DEFAULT_WHISPER_MODEL,
-    ).await {
+    // Default Transcription Model: SenseVoice (Chinese-first)
+    if let Err(e) = seed_default_transcript_config(pool).await {
         error!("Failed to set default transcription model config: {}", e);
     }
 
@@ -273,4 +282,43 @@ pub async fn open_database_folder(app: AppHandle) -> Result<(), String> {
 
     info!("Opened database folder: {}", folder_path);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::repositories::setting::SettingsRepository;
+
+    async fn empty_pool() -> sqlx::SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query(
+            "CREATE TABLE transcript_settings (
+                id TEXT PRIMARY KEY,
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                whisperApiKey TEXT,
+                deepgramApiKey TEXT,
+                elevenLabsApiKey TEXT,
+                groqApiKey TEXT,
+                openaiApiKey TEXT
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        pool
+    }
+
+    #[tokio::test]
+    async fn fresh_install_seeds_sense_voice_provider() {
+        let pool = empty_pool().await;
+        seed_default_transcript_config(&pool).await.unwrap();
+
+        let config = SettingsRepository::get_transcript_config(&pool)
+            .await
+            .unwrap()
+            .expect("fresh install must seed a transcript_settings row");
+        assert_eq!(config.provider, "senseVoice");
+        assert_eq!(config.model, crate::config::DEFAULT_SENSEVOICE_MODEL);
+    }
 }

@@ -5,6 +5,7 @@ import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { Eye, EyeOff, Lock, Unlock } from 'lucide-react';
+import { toast } from 'sonner';
 import { ModelManager } from './WhisperModelManager';
 import { SenseVoiceModelCard } from './SenseVoiceModelCard';
 import { DEFAULT_SENSEVOICE_MODEL, DEFAULT_WHISPER_MODEL } from '../constants/modelDefaults';
@@ -69,6 +70,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     };
 
     const saveTranscriptConfig = async (config: TranscriptModelProps) => {
+        const previous = transcriptModelConfig;
         setTranscriptModelConfig(config);
         try {
             await invoke('api_save_transcript_config', {
@@ -78,6 +80,9 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
             });
         } catch (err) {
             console.error('Failed to save transcript config:', err);
+            // 保存失败时 UI 不能停留在未落库的 provider 上。
+            setTranscriptModelConfig(previous);
+            toast.error('保存转写设置失败，请重试');
         }
     };
 

@@ -406,14 +406,6 @@ mod tests {
     }
 
     #[test]
-    fn empty_provider_falls_back_to_default_sense_voice() {
-        let cfg = normalize_transcript_provider("", "");
-        assert_eq!(cfg.provider, "senseVoice");
-        assert_eq!(cfg.provider, crate::config::DEFAULT_TRANSCRIPTION_PROVIDER);
-        assert_eq!(cfg.model, crate::config::DEFAULT_SENSEVOICE_MODEL);
-    }
-
-    #[test]
     fn builtin_ai_provider_falls_back_to_custom_openai() {
         assert_eq!(normalize_summary_provider("builtin-ai"), "custom-openai");
         assert_eq!(normalize_summary_provider("ollama"), "ollama");

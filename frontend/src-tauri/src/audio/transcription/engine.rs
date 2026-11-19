@@ -55,14 +55,16 @@ pub(crate) enum EngineKind {
     Provider,
 }
 
+fn unsupported_provider_error(provider: &str) -> String {
+    format!("不支持的转写提供方「{provider}」，请选择「本地 SenseVoice」或「本地 Whisper」。")
+}
+
 /// provider 字符串 → 引擎类型。未知 provider 一律报错，不再静默回退 Whisper。
 pub(crate) fn engine_kind_for_provider(provider: &str) -> Result<EngineKind, String> {
     match provider {
         "localWhisper" => Ok(EngineKind::Whisper),
         "senseVoice" => Ok(EngineKind::Provider),
-        other => Err(format!(
-            "不支持的转写提供方「{other}」，请选择「本地 SenseVoice」或「本地 Whisper」。"
-        )),
+        other => Err(unsupported_provider_error(other)),
     }
 }
 
@@ -105,10 +107,11 @@ pub async fn validate_transcription_model_ready<R: Runtime>(app: &AppHandle<R>) 
             config
         }
         Ok(None) => {
-            info!("📝 No transcript config found, defaulting to localWhisper");
+            // api_get_transcript_config 现在总是返回 Some；保留此分支仅为防御，且与 api.rs 的默认保持一致。
+            info!("📝 No transcript config found, defaulting to SenseVoice");
             crate::api::api::TranscriptConfig {
-                provider: "localWhisper".to_string(),
-                model: crate::config::DEFAULT_WHISPER_MODEL.to_string(),
+                provider: crate::config::DEFAULT_TRANSCRIPTION_PROVIDER.to_string(),
+                model: crate::config::DEFAULT_SENSEVOICE_MODEL.to_string(),
                 api_key: None,
             }
         }
@@ -153,7 +156,7 @@ pub async fn validate_transcription_model_ready<R: Runtime>(app: &AppHandle<R>) 
         }
         other => {
             warn!("❌ Unsupported transcription provider for local recording: {}", other);
-            Err(engine_kind_for_provider(other).unwrap_err())
+            Err(unsupported_provider_error(other))
         }
     }
 }
@@ -178,10 +181,11 @@ pub async fn get_or_init_transcription_engine<R: Runtime>(
             config
         }
         Ok(None) => {
-            info!("📝 No transcript config found, defaulting to localWhisper");
+            // api_get_transcript_config 现在总是返回 Some；保留此分支仅为防御，且与 api.rs 的默认保持一致。
+            info!("📝 No transcript config found, defaulting to SenseVoice");
             crate::api::api::TranscriptConfig {
-                provider: "localWhisper".to_string(),
-                model: crate::config::DEFAULT_WHISPER_MODEL.to_string(),
+                provider: crate::config::DEFAULT_TRANSCRIPTION_PROVIDER.to_string(),
+                model: crate::config::DEFAULT_SENSEVOICE_MODEL.to_string(),
                 api_key: None,
             }
         }
@@ -216,7 +220,7 @@ pub async fn get_or_init_transcription_engine<R: Runtime>(
         other => {
             // 未知 provider 必须报错：静默回退 Whisper 会造成「校验报错但引擎仍用 Whisper」的分裂。
             warn!("Provider '{}' is not supported", other);
-            Err(engine_kind_for_provider(other).unwrap_err())
+            Err(unsupported_provider_error(other))
         }
     }
 }

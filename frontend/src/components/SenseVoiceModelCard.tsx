@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { SenseVoiceAPI, SenseVoiceModelStatus } from '../lib/whisper';
 
-type CardState = SenseVoiceModelStatus['state'] | 'loading';
+type CardState = SenseVoiceModelStatus['state'] | 'loading' | 'statusError';
 
 const MODEL_SIZE_LABEL = '约 228 MB';
 
@@ -23,8 +23,9 @@ export function SenseVoiceModelCard({ className = '' }: { className?: string }) 
       setState(status.state);
       setProgress(status.progress ?? 0);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setState('missing');
+      // 状态读取失败不是「未下载」：保留错误态，别把 IPC/目录故障伪装成可下载。
+      console.error('Failed to read SenseVoice model status:', err);
+      setState('statusError');
     }
   }, []);
 
@@ -102,6 +103,21 @@ export function SenseVoiceModelCard({ className = '' }: { className?: string }) 
             <div className="flex items-center gap-1.5 text-green-600">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
               <span className="text-xs font-medium">已就绪</span>
+            </div>
+          )}
+
+          {state === 'statusError' && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-red-600">读取模型状态失败，请重试</span>
+              <button
+                onClick={() => {
+                  setState('loading');
+                  void refresh();
+                }}
+                className="text-xs text-gray-600 hover:text-blue-600 font-medium transition-colors px-2 py-1 rounded hover:bg-blue-50"
+              >
+                重试
+              </button>
             </div>
           )}
 
