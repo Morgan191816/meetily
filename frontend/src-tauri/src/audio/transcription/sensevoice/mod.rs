@@ -3,6 +3,7 @@
 use sherpa_onnx::{OfflineRecognizerConfig, OfflineSenseVoiceModelConfig};
 use std::path::Path;
 
+pub mod commands;
 pub mod model;
 pub mod provider;
 

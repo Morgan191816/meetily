@@ -888,6 +888,11 @@ pub fn run() {
             // System settings commands
             #[cfg(target_os = "macos")]
             utils::open_system_settings,
+            // SenseVoice model management
+            audio::transcription::sensevoice::commands::sensevoice_get_status,
+            audio::transcription::sensevoice::commands::sensevoice_download_model,
+            audio::transcription::sensevoice::commands::sensevoice_cancel_download,
+            audio::transcription::sensevoice::commands::sensevoice_delete_model,
             // Retranscription commands
             audio::retranscription::start_retranscription_command,
             audio::retranscription::cancel_retranscription_command,
