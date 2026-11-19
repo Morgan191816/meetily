@@ -85,21 +85,28 @@ fn collect(value: &serde_json::Value, out: &mut Vec<(String, String)>) {
 /// 初始化全局术语表：`user`（用户覆盖）优先，其次 `bundled`（打包资源）；
 /// 都读不到就用空表，不阻断转写。
 pub fn init(user: Option<PathBuf>, bundled: Option<PathBuf>) {
-    let loaded = user
-        .and_then(|path| std::fs::read_to_string(&path).ok().map(|json| (path, json)))
-        .or_else(|| {
-            bundled.and_then(|path| std::fs::read_to_string(&path).ok().map(|json| (path, json)))
-        });
-    let (corrector, source) = match loaded {
-        Some((path, json)) => (TermCorrector::from_json(&json), path.display().to_string()),
-        None => (TermCorrector::from_json("{}"), "空表".to_string()),
+    let (corrector, source) = match user.and_then(|path| read_terms(&path)) {
+        // "{}" 是合法的用户显式禁用，不回落
+        Some((corrector, true)) => (corrector, "用户"),
+        Some((corrector, false)) if !corrector.rules.is_empty() => (corrector, "用户"),
+        // 用户文件不可读、JSON 非法或解析出 0 条规则 → 回落打包资源
+        _ => match bundled.and_then(|path| read_terms(&path)) {
+            Some((corrector, _)) if !corrector.rules.is_empty() => (corrector, "打包"),
+            _ => (TermCorrector::from_json("{}"), "空表"),
+        },
     };
-    log::info!(
-        "术语表已加载：{} 条规则（来源：{}）",
-        corrector.rules.len(),
-        source
-    );
-    let _ = TERM_CORRECTOR.set(corrector);
+    let rules = corrector.rules.len();
+    if TERM_CORRECTOR.set(corrector).is_ok() {
+        log::info!("术语表已加载：{} 条规则（来源：{}）", rules, source);
+    }
+}
+
+/// 读取并解析词表；返回 (纠正器, 是否为空对象)。文件不可读或 JSON 非法返回 None。
+fn read_terms(path: &PathBuf) -> Option<(TermCorrector, bool)> {
+    let json = std::fs::read_to_string(path).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&json).ok()?;
+    let empty_object = value.as_object().is_some_and(|map| map.is_empty());
+    Some((TermCorrector::from_json(&json), empty_object))
 }
 
 #[cfg(test)]
@@ -143,5 +150,16 @@ mod tests {
     fn empty_or_invalid_json_yields_identity() {
         assert_eq!(TermCorrector::from_json("not json").correct("原文"), "原文");
         assert_eq!(TermCorrector::from_json("{}").correct("原文"), "原文");
+    }
+
+    #[test]
+    fn generic_two_char_aliases_do_not_corrupt_ordinary_words() {
+        let c = TermCorrector::from_json(
+            r#"{"能源":{"微电网":{"correct":"微电网","aliases":["微电网","微网"]}},
+                "公司":{"小米":{"correct":"小米","aliases":["小蜜"]}}}"#,
+        );
+        assert_eq!(c.correct("微电子行业"), "微电子行业");
+        assert_eq!(c.correct("小爱同学"), "小爱同学");
+        assert_eq!(c.correct("微电网项目"), "微电网项目");
     }
 }
