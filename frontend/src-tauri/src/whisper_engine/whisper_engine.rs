@@ -629,7 +629,7 @@ impl WhisperEngine {
                 Err(_) => continue,
             };
 
-            // Calculate confidence based on segment length and duration (simplified approach)
+            // 估算值：按文本长度推算，不是 whisper.cpp 的 logprob。UI 会标注「估算」。
             let segment_length = segment_text.len() as f32;
             let segment_confidence = if segment_length > 0.0 {
                 (segment_length / 100.0).min(0.9) + 0.1 // 0.1 to 1.0 confidence based on text length
