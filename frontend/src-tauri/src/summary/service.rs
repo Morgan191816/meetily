@@ -147,14 +147,14 @@ fn build_summary_result_json(
     normalization_fallback: bool,
 ) -> Result<serde_json::Value, String> {
     let cleaned_final = clean_llm_markdown_detailed(final_markdown);
-    require_visible_markdown("Final summary", &cleaned_final)?;
+    require_visible_markdown("最终纪要", &cleaned_final)?;
     let markdown = strip_title_if_present(&cleaned_final.markdown);
     if markdown.trim().is_empty() {
-        return Err("Final summary contains no visible content after title removal".to_string());
+        return Err("移除标题后，最终纪要不含可见内容".to_string());
     }
 
     let cleaned_english = clean_llm_markdown_detailed(english_markdown);
-    require_visible_markdown("English summary", &cleaned_english)?;
+    require_visible_markdown("英文纪要", &cleaned_english)?;
 
     Ok(serde_json::json!({
         "markdown": markdown,
@@ -1060,7 +1060,7 @@ mod tests {
                 false,
                 false,
             ),
-            Err("Final summary contains no visible content after title removal".to_string())
+            Err("移除标题后，最终纪要不含可见内容".to_string())
         );
     }
 

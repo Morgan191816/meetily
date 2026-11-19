@@ -1733,7 +1733,7 @@ async fn swap_linux_stream<R: Runtime>(
     microphone: bool,
     follow_default: bool,
 ) -> Result<(), String> {
-    if !session_live(session) { return Err("Recording stopped".into()); }
+    if !session_live(session) { return Err("录音已停止".into()); }
     let role = if microphone { super::recording_state::DeviceType::Microphone } else { super::recording_state::DeviceType::System };
     let stream = super::stream::AudioStream::prepare_linux(device.clone(), session.clone(), role).await.map_err(|e| e.to_string())?;
     if follow_default {
@@ -1745,7 +1745,7 @@ async fn swap_linux_stream<R: Runtime>(
     }
     if !session_live(session) || stream.has_ended() {
         let _ = stream.stop().await;
-        return Err("Audio replacement is no longer available".into());
+        return Err("音频替换功能已不可用".into());
     }
     loop {
         let finished = {
@@ -1758,10 +1758,10 @@ async fn swap_linux_stream<R: Runtime>(
         match finished {
             Some(true) => break,
             Some(false) => tokio::time::sleep(std::time::Duration::from_millis(10)).await,
-            None => { let _ = stream.stop().await; return Err("Recording stopped".into()); }
+            None => { let _ = stream.stop().await; return Err("录音已停止".into()); }
         }
     }
-    if stream.has_ended() { let _ = stream.stop().await; return Err("Audio replacement ended during preparation".into()); }
+    if stream.has_ended() { let _ = stream.stop().await; return Err("准备过程中音频替换已结束".into()); }
     // Retirement commits this successor; follow any newer default on the next cycle.
     let mut prepared = Some(stream);
     let old = {
@@ -1777,7 +1777,7 @@ async fn swap_linux_stream<R: Runtime>(
             _ => None,
         }
     };
-    if let Some(stream) = prepared { let _ = stream.stop().await; return Err("Recording stopped".into()); }
+    if let Some(stream) = prepared { let _ = stream.stop().await; return Err("录音已停止".into()); }
     if let Some(old) = old {
         if let Err(e) = old.stop().await {
             if session_live(session) {
@@ -1856,7 +1856,7 @@ async fn attempt_linux_recovery<
         Ok(active.clone())
     } else {
         default_device().await.and_then(|device| {
-            if device.name == active.name { Err("No replacement default audio device is available".into()) }
+            if device.name == active.name { Err("没有可替换的默认音频设备".into()) }
             else { Ok(Arc::new(device)) }
         })
     };

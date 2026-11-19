@@ -870,7 +870,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let result = find_audio_file(dir.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No audio file found"));
+        assert!(result.unwrap_err().to_string().contains("未在以下位置找到音频文件"));
     }
 
     #[test]

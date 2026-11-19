@@ -121,7 +121,7 @@ pub async fn api_save_meeting_summary<R: Runtime>(
                 "Meeting not found or invalid JSON for meeting_id: {}",
                 meeting_id
             );
-            Err("Meeting not found or can't convert the json".into())
+            Err("未找到会议，或会议数据无法解析".into())
         }
         Err(e) => {
             log_error!("Failed to save meeting summary for {}: {}", meeting_id, e);

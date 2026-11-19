@@ -54,11 +54,11 @@ pub(crate) fn contains_reasoning_marker(markdown: &str) -> bool {
 pub fn require_visible_markdown(stage: &str, cleaned: &CleanedLlmMarkdown) -> Result<(), String> {
     if contains_reasoning_marker(&cleaned.markdown) {
         Err(format!(
-            "{stage} contained an unterminated reasoning marker"
+            "{stage}包含未闭合的推理标记"
         ))
     } else if cleaned.markdown.is_empty() {
         Err(format!(
-            "{stage} returned no visible summary content after reasoning removal"
+            "{stage}在移除推理内容后不含可见纪要内容"
         ))
     } else {
         Ok(())
@@ -380,7 +380,7 @@ pub(crate) async fn generate_meeting_summary(
     cached_english: Option<&str>,
 ) -> Result<GeneratedMeetingSummary, String> {
     if cancellation_token.is_some_and(CancellationToken::is_cancelled) {
-        return Err("Summary generation was cancelled".to_string());
+        return Err("纪要生成已取消".to_string());
     }
     info!("Starting summary generation with provider: {:?}, model: {}", provider, model_name);
 
@@ -400,7 +400,7 @@ pub(crate) async fn generate_meeting_summary(
                 let mut chunk_summaries = Vec::with_capacity(num_chunks);
                 for (index, chunk) in chunks.iter().enumerate() {
                     if cancellation_token.is_some_and(CancellationToken::is_cancelled) {
-                        return Err("Summary generation was cancelled".to_string());
+                        return Err("纪要生成已取消".to_string());
                     }
                     let prompt = build_chunk_summary_user_prompt(chunk);
                     for attempt in 1..=MAX_CHUNK_ATTEMPTS {
@@ -415,7 +415,7 @@ pub(crate) async fn generate_meeting_summary(
                                 let cleaned = clean_llm_markdown_detailed(&completion.content);
                                 stage_reasoning_stripped |=
                                     completion.reasoning_stripped || cleaned.reasoning_stripped;
-                                require_visible_markdown("Summary chunk", &cleaned).map(|()| cleaned)
+                                require_visible_markdown("纪要片段", &cleaned).map(|()| cleaned)
                             }
                             Err(error) => Err(error),
                         };
@@ -428,7 +428,7 @@ pub(crate) async fn generate_meeting_summary(
                             Err(error)
                                 if cancellation_token.is_some_and(CancellationToken::is_cancelled) =>
                             {
-                                return Err("Summary generation was cancelled".to_string());
+                                return Err("纪要生成已取消".to_string());
                             }
                             Err(_) if should_retry_chunk_failure(attempt, cancellation_token) => {
                                 warn!(
@@ -459,7 +459,7 @@ pub(crate) async fn generate_meeting_summary(
                     }
                 }
                 if chunk_summaries.is_empty() {
-                    return Err("Multi-level summarization failed: No chunks were processed successfully.".to_string());
+                    return Err("多级纪要生成失败：没有任何片段处理成功。".to_string());
                 }
                 successful_chunk_count = chunk_summaries.len() as i64;
                 content_to_summarize = if chunk_summaries.len() == 1 {
@@ -476,7 +476,7 @@ pub(crate) async fn generate_meeting_summary(
                     let cleaned = clean_llm_markdown_detailed(&completion.content);
                     stage_reasoning_stripped |=
                         completion.reasoning_stripped || cleaned.reasoning_stripped;
-                    require_visible_markdown("Combined summary", &cleaned)?;
+                    require_visible_markdown("合并纪要", &cleaned)?;
                     cleaned.markdown
                 };
             } else {
@@ -503,7 +503,7 @@ pub(crate) async fn generate_meeting_summary(
             .await?;
             let cleaned = clean_llm_markdown_detailed(&completion.content);
             stage_reasoning_stripped |= completion.reasoning_stripped || cleaned.reasoning_stripped;
-            require_visible_markdown("Final summary", &cleaned)?;
+            require_visible_markdown("最终纪要", &cleaned)?;
             (cleaned.markdown, successful_chunk_count, stage_reasoning_stripped)
         };
 
@@ -564,7 +564,7 @@ async fn run_markdown_transform(
     cancellation_token: Option<&CancellationToken>,
 ) -> Result<CleanedLlmMarkdown, String> {
     if cancellation_token.is_some_and(CancellationToken::is_cancelled) {
-        return Err("Summary generation was cancelled".to_string());
+        return Err("纪要生成已取消".to_string());
     }
     let completion = generate_summary(
         client, provider, model_name, api_key, system_prompt, user_prompt, ollama_endpoint,
@@ -602,7 +602,7 @@ async fn translate_markdown(
         cancellation_token,
     )
     .await?;
-    require_visible_markdown("Translation", &cleaned)?;
+    require_visible_markdown("翻译结果", &cleaned)?;
     Ok(cleaned)
 }
 
@@ -762,7 +762,7 @@ mod tests {
         cancellation_token.cancel();
         assert!(english_markdown_after_normalization_result(
             "# Original",
-            Err("Summary generation was cancelled".to_string()),
+            Err("纪要生成已取消".to_string()),
             Some(&cancellation_token),
         )
         .is_err());
@@ -875,8 +875,8 @@ mod tests {
         ] {
             let cleaned = clean_llm_markdown_detailed(raw);
             assert_eq!(
-                require_visible_markdown("Final summary", &cleaned),
-                Err("Final summary contained an unterminated reasoning marker".to_string())
+                require_visible_markdown("最终纪要", &cleaned),
+                Err("最终纪要包含未闭合的推理标记".to_string())
             );
         }
     }
@@ -885,15 +885,15 @@ mod tests {
     fn reasoning_only_and_empty_fences_fail_visible_content_guard() {
         let reasoning_only = clean_llm_markdown_detailed("<think>private</think>");
         assert_eq!(
-            require_visible_markdown("Final summary", &reasoning_only),
-            Err("Final summary returned no visible summary content after reasoning removal".to_string())
+            require_visible_markdown("最终纪要", &reasoning_only),
+            Err("最终纪要在移除推理内容后不含可见纪要内容".to_string())
         );
         for raw in ["```\n```", "```markdown\n```", "```\r\n```", "```markdown\r\n```"] {
             let empty_fence = clean_llm_markdown_detailed(raw);
             assert_eq!(empty_fence.markdown, "");
             assert_eq!(
-                require_visible_markdown("Translation", &empty_fence),
-                Err("Translation returned no visible summary content after reasoning removal".to_string())
+                require_visible_markdown("翻译结果", &empty_fence),
+                Err("翻译结果在移除推理内容后不含可见纪要内容".to_string())
             );
         }
     }

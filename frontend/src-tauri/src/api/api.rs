@@ -833,7 +833,7 @@ pub async fn open_meeting_folder<R: Runtime>(
                 Ok(())
             } else {
                 log_warn!("Meeting {} has no folder_path set", meeting_id);
-                Err("Recording folder path not available for this meeting".to_string())
+                Err("该会议没有可用的录音文件夹路径".to_string())
             }
         }
         None => {

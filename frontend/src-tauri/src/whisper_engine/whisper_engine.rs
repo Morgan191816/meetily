@@ -1290,7 +1290,7 @@ mod tests {
 
         assert!(error
             .to_string()
-            .contains("Invalid model file: missing GGML/GGUF magic number"));
+            .contains("模型文件无效：缺少 GGML/GGUF 文件标识"));
         assert!(!engine.active_downloads.lock().await.contains_key("tiny"));
         assert!(!model_path.exists());
         assert!(matches!(
@@ -1535,7 +1535,7 @@ mod tests {
         let request = String::from_utf8(request.await.unwrap()).unwrap();
         server.await.unwrap();
 
-        assert!(error.to_string().contains("too small"));
+        assert!(error.to_string().contains("模型文件过小"));
         assert!(request.to_ascii_lowercase().contains(&format!(
             "user-agent: morganmeet/{}",
             env!("CARGO_PKG_VERSION")
@@ -1638,7 +1638,7 @@ mod tests {
             .unwrap_err();
         server.await.unwrap();
 
-        assert!(error.to_string().contains("Failed to read chunk"));
+        assert!(error.to_string().contains("读取下载数据失败"));
         assert!(!engine.active_downloads.lock().await.contains_key("tiny"));
         assert!(!model_path.exists());
         assert!(matches!(
