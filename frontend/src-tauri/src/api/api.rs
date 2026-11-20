@@ -962,6 +962,7 @@ pub async fn api_save_custom_openai_config<R: Runtime>(
     max_tokens: Option<i32>,
     temperature: Option<f32>,
     top_p: Option<f32>,
+    protocol: Option<Protocol>,
 ) -> Result<serde_json::Value, String> {
     log_info!(
         "Custom OpenAI config save requested; endpoint_origin={}, model={}",
@@ -1006,7 +1007,7 @@ pub async fn api_save_custom_openai_config<R: Runtime>(
         max_tokens,
         temperature,
         top_p,
-        protocol: Default::default(), // Task 4 改为从入参读取
+        protocol: protocol.unwrap_or_default(),
     };
 
     let pool = state.db_manager.pool();

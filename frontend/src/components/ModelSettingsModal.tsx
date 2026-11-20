@@ -160,6 +160,11 @@ export function ModelSettingsModal({
   const [customTopP, setCustomTopP] = useState<string>(modelConfig.topP?.toString() || '');
   const [isCustomOpenAIAdvancedOpen, setIsCustomOpenAIAdvancedOpen] = useState<boolean>(false);
   const [isTestingConnection, setIsTestingConnection] = useState<boolean>(false);
+  const [customProtocol, setCustomProtocol] = useState<'openai' | 'anthropic'>('openai');
+  const [customModels, setCustomModels] = useState<string[]>([]);
+  const [isFetchingCustomModels, setIsFetchingCustomModels] = useState<boolean>(false);
+  const [customModelsError, setCustomModelsError] = useState<string>('');
+  const [isManualModelInput, setIsManualModelInput] = useState<boolean>(true);
 
   // Combobox state
   const [modelComboboxOpen, setModelComboboxOpen] = useState<boolean>(false);
@@ -300,6 +305,7 @@ export function ModelSettingsModal({
                 setCustomMaxTokens(customConfig.maxTokens?.toString() || '');
                 setCustomTemperature(customConfig.temperature?.toString() || '');
                 setCustomTopP(customConfig.topP?.toString() || '');
+                setCustomProtocol(customConfig.protocol === 'anthropic' ? 'anthropic' : 'openai');
               }
             } catch (err) {
               console.error('Failed to fetch custom OpenAI config:', err);
@@ -370,6 +376,18 @@ export function ModelSettingsModal({
     modelConfig.temperature,
     modelConfig.topP
   ]);
+
+  // skipInitialFetch 时父组件的 modelConfig 不含 protocol，单独读取，避免保存时把已存协议覆盖成 openai
+  useEffect(() => {
+    if (!skipInitialFetch || modelConfig.provider !== 'custom-openai') return;
+    invoke<any>('api_get_custom_openai_config')
+      .then((config) => {
+        if (config?.protocol) {
+          setCustomProtocol(config.protocol === 'anthropic' ? 'anthropic' : 'openai');
+        }
+      })
+      .catch(() => {});
+  }, [skipInitialFetch, modelConfig.provider]);
 
   // Reset hasAutoFetched flag and clear models when switching away from Ollama
   useEffect(() => {
@@ -607,6 +625,7 @@ export function ModelSettingsModal({
           maxTokens: customMaxTokens ? parseInt(customMaxTokens, 10) : null,
           temperature: customTemperature ? parseFloat(customTemperature) : null,
           topP: customTopP ? parseFloat(customTopP) : null,
+          protocol: customProtocol,
         });
         console.log('Custom OpenAI config saved successfully');
       } catch (err) {
@@ -650,6 +669,45 @@ export function ModelSettingsModal({
     onSave(updatedConfig);
   };
 
+  // 切协议：旧协议下的模型与列表不再适用，清空已选模型但保留 URL 与 Key
+  const handleCustomProtocolChange = (protocol: 'openai' | 'anthropic') => {
+    if (protocol === customProtocol) return;
+    setCustomProtocol(protocol);
+    setCustomOpenAIModel('');
+    setCustomModels([]);
+    setCustomModelsError('');
+    setIsManualModelInput(true);
+    // Anthropic 温度上限是 1.0，超出的旧值会让网关返回 4xx
+    if (protocol === 'anthropic' && parseFloat(customTemperature) > 1) {
+      setCustomTemperature('1');
+    }
+  };
+
+  const fetchCustomModels = async () => {
+    const endpoint = customOpenAIEndpoint.trim();
+    if (!endpoint) {
+      setCustomModelsError('请先填写接口地址');
+      return;
+    }
+    setIsFetchingCustomModels(true);
+    setCustomModelsError('');
+    try {
+      const list = (await invoke('api_list_custom_models', {
+        endpoint,
+        apiKey: customOpenAIApiKey.trim() || null,
+        protocol: customProtocol,
+      })) as string[];
+      setCustomModels(list);
+      setIsManualModelInput(false);
+      setCustomOpenAIModel((current) => (list.includes(current) ? current : list[0] ?? current));
+    } catch (err) {
+      // 后端错误串只含 endpoint origin 与响应片段，不含 Key；失败时保持手动输入
+      setCustomModelsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsFetchingCustomModels(false);
+    }
+  };
+
   // Test custom OpenAI connection
   const testCustomOpenAIConnection = async () => {
     if (!customOpenAIEndpoint.trim() || !customOpenAIModel.trim()) {
@@ -663,6 +721,7 @@ export function ModelSettingsModal({
         endpoint: customOpenAIEndpoint.trim(),
         apiKey: customOpenAIApiKey.trim() || null,
         model: customOpenAIModel.trim(),
+        protocol: customProtocol,
       });
       toast.success('连接成功，响应校验通过');
     } catch (err) {
@@ -840,6 +899,7 @@ export function ModelSettingsModal({
                       setCustomMaxTokens(config.maxTokens?.toString() || '');
                       setCustomTemperature(config.temperature?.toString() || '');
                       setCustomTopP(config.topP?.toString() || '');
+                      setCustomProtocol(config.protocol === 'anthropic' ? 'anthropic' : 'openai');
                     }
                   }).catch((err) => {
                     console.error('Failed to load custom OpenAI config:', err);
@@ -852,7 +912,7 @@ export function ModelSettingsModal({
               </SelectTrigger>
               <SelectContent className="max-h-64 overflow-y-auto">
                 <SelectItem value="claude">Claude</SelectItem>
-                <SelectItem value="custom-openai">自定义服务（OpenAI 兼容）</SelectItem>
+                <SelectItem value="custom-openai">自定义服务（OpenAI / Anthropic 兼容）</SelectItem>
                 <SelectItem value="groq">Groq</SelectItem>
                 <SelectItem value="ollama">Ollama</SelectItem>
                 <SelectItem value="openai">OpenAI</SelectItem>
@@ -924,28 +984,101 @@ export function ModelSettingsModal({
         {modelConfig.provider === 'custom-openai' && (
           <div className="space-y-4 border-t pt-4">
             <div>
-              <Label htmlFor="custom-endpoint">接口地址 *</Label>
-              <Input
-                id="custom-endpoint"
-                value={customOpenAIEndpoint}
-                onChange={(e) => setCustomOpenAIEndpoint(e.target.value)}
-                placeholder="http://localhost:8000/v1"
-                className="mt-1"
-              />
+              <Label>接口协议</Label>
+              <Select
+                value={customProtocol}
+                onValueChange={(value) => handleCustomProtocolChange(value as 'openai' | 'anthropic')}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openai">OpenAI 兼容</SelectItem>
+                  <SelectItem value="anthropic">Anthropic 兼容</SelectItem>
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground mt-1">
-                OpenAI 兼容接口的基础地址
+                {customProtocol === 'anthropic'
+                  ? '使用 Anthropic 兼容协议（/v1/messages），温度上限为 1.0'
+                  : '使用 OpenAI 兼容协议（/v1/chat/completions）'}
               </p>
             </div>
 
             <div>
-              <Label htmlFor="custom-model">模型名称 *</Label>
-              <Input
-                id="custom-model"
-                value={customOpenAIModel}
-                onChange={(e) => setCustomOpenAIModel(e.target.value)}
-                placeholder="gpt-4、llama-3-70b 等"
-                className="mt-1"
-              />
+              <Label htmlFor="custom-endpoint">接口地址 *</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  id="custom-endpoint"
+                  value={customOpenAIEndpoint}
+                  onChange={(e) => setCustomOpenAIEndpoint(e.target.value)}
+                  placeholder="http://localhost:8000/v1"
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={fetchCustomModels}
+                  disabled={isFetchingCustomModels}
+                  className="whitespace-nowrap"
+                >
+                  {isFetchingCustomModels ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      获取中…
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      获取模型
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                接口基础地址，支持 OpenAI 兼容或 Anthropic 兼容服务
+              </p>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="custom-model">模型名称 *</Label>
+                {customModels.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsManualModelInput(!isManualModelInput)}
+                  >
+                    {isManualModelInput ? '从列表选择' : '手动输入'}
+                  </Button>
+                )}
+              </div>
+              {customModels.length > 0 && !isManualModelInput ? (
+                <Select value={customOpenAIModel} onValueChange={setCustomOpenAIModel}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="选择模型" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-64 overflow-y-auto">
+                    {customModels.map((model) => (
+                      <SelectItem key={model} value={model}>
+                        {model}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id="custom-model"
+                  value={customOpenAIModel}
+                  onChange={(e) => setCustomOpenAIModel(e.target.value)}
+                  placeholder="gpt-4、llama-3-70b 等"
+                  className="mt-1"
+                />
+              )}
+              {customModelsError && (
+                <p className="text-xs text-red-600 mt-1">{customModelsError}</p>
+              )}
               <p className="text-xs text-muted-foreground mt-1">
                 请求使用的模型标识
               </p>
@@ -991,13 +1124,15 @@ export function ModelSettingsModal({
                     />
                   </div>
                   <div>
-                    <Label htmlFor="custom-temperature">温度（0.0-2.0）</Label>
+                    <Label htmlFor="custom-temperature">
+                      温度（0.0-{customProtocol === 'anthropic' ? '1.0' : '2.0'}）
+                    </Label>
                     <Input
                       id="custom-temperature"
                       type="number"
                       step="0.1"
                       min="0"
-                      max="2"
+                      max={customProtocol === 'anthropic' ? '1' : '2'}
                       value={customTemperature}
                       onChange={(e) => setCustomTemperature(e.target.value)}
                       placeholder="例如 0.7"

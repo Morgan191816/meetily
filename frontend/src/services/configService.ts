@@ -34,6 +34,7 @@ export interface CustomOpenAIConfig {
   maxTokens: number | null;
   temperature: number | null;
   topP: number | null;
+  protocol?: 'openai' | 'anthropic';
 }
 
 export interface RecordingPreferences {
@@ -92,6 +93,7 @@ export class ConfigService {
       maxTokens: config.maxTokens,
       temperature: config.temperature,
       topP: config.topP,
+      protocol: config.protocol,
     });
   }
 
@@ -100,17 +102,20 @@ export class ConfigService {
    * @param endpoint - API endpoint URL
    * @param apiKey - Optional API key
    * @param model - Model name
+   * @param protocol - Wire protocol; defaults to OpenAI-compatible
    * @returns Promise with test result
    */
   async testCustomOpenAIConnection(
     endpoint: string,
     apiKey: string | null,
-    model: string
+    model: string,
+    protocol?: 'openai' | 'anthropic'
   ): Promise<{ status: string; message: string; http_status?: number }> {
     return invoke<{ status: string; message: string; http_status?: number }>('api_test_custom_openai_connection', {
       endpoint,
       apiKey,
       model,
+      protocol,
     });
   }
 }
