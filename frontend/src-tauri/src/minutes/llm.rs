@@ -79,7 +79,7 @@ pub struct TaskItem {
     pub owner: String,
     #[serde(alias = "参与人")]
     pub participants: String,
-    #[serde(alias = "截止日期")]
+    #[serde(alias = "截止日期", alias = "结束日期")]
     pub deadline: String,
     #[serde(alias = "描述")]
     pub description: String,
@@ -87,7 +87,7 @@ pub struct TaskItem {
     pub risk: String,
     #[serde(alias = "难度点")]
     pub difficulty: String,
-    #[serde(alias = "需协助点")]
+    #[serde(alias = "需协助点", alias = "help")]
     pub help_needed: String,
 }
 
@@ -98,7 +98,7 @@ pub struct LlmParams<'a> {
 }
 
 async fn call_llm(params: &LlmParams<'_>, user_prompt: &str) -> Result<String, String> {
-    generate_summary(
+    let completion = generate_summary(
         params.client,
         &LLMProvider::CustomOpenAI,
         &params.config.model,
@@ -114,8 +114,12 @@ async fn call_llm(params: &LlmParams<'_>, user_prompt: &str) -> Result<String, S
         None,
     )
     .await
-    .map(|completion| completion.content)
-    .map_err(|error| format!("调用大模型失败：{error}"))
+    .map_err(|error| format!("调用大模型失败：{error}"))?;
+    // content 为 null 时 completion 是空串，不能当成成功
+    if completion.content.trim().is_empty() {
+        return Err("大模型返回内容为空，请检查模型设置或稍后重试".to_string());
+    }
+    Ok(completion.content)
 }
 
 /// step2：会议总结。Python 版解析失败按空结构处理，这里返回可读错误。
@@ -249,10 +253,8 @@ pub fn parse_step3_json(raw: &str) -> Vec<TaskItem> {
 fn tasks_from_value(value: &Value) -> Vec<TaskItem> {
     let items: &[Value] = match value {
         Value::Array(items) => items,
-        Value::Object(obj) => obj
-            .get("tasks")
-            .or_else(|| obj.get("行动项"))
-            .and_then(Value::as_array)
+        // 照 Python 的 a or b：tasks 为 null/空数组时回退到行动项
+        Value::Object(obj) => first_array(obj, &["tasks", "行动项"])
             .map(Vec::as_slice)
             .unwrap_or(&[]),
         _ => &[],
@@ -294,16 +296,18 @@ fn extract_json(raw: &str, want_object: bool) -> Option<Value> {
 }
 
 fn strip_reasoning_preamble(content: &str) -> &str {
+    let json_start = content.find(['{', '[']);
     for marker in REASONING_MARKERS {
-        if let Some(idx) = content.find(marker) {
-            let after_marker = &content[idx + marker.len()..];
-            if let Some(json_start) = after_marker.find('{') {
-                return &after_marker[json_start..];
-            }
-            let rest = &content[idx..];
-            if let Some(json_start) = rest.find('{') {
-                return &rest[json_start..];
-            }
+        let Some(idx) = content.find(marker) else {
+            continue;
+        };
+        // 标记出现在 JSON 内部（如 "content":"首先确认…"）时不得截断
+        if json_start.is_none_or(|start| idx >= start) {
+            continue;
+        }
+        let after_marker = &content[idx + marker.len()..];
+        if let Some(offset) = after_marker.find(['{', '[']) {
+            return &after_marker[offset..];
         }
     }
     content
@@ -346,7 +350,16 @@ fn parse_next_meeting(obj: &Map<String, Value>) -> Option<NextMeeting> {
         .filter_map(|key| obj.get(*key))
         .find_map(|value| value.as_object().filter(|map| !map.is_empty()))?;
     let date = first_str(meeting, &["date", "日期"]);
-    let agenda = first_str(meeting, &["agenda", "议程"]);
+    // agenda 为数组时用「；」拼接（照 assistant_bridge.py:482-484）
+    let agenda = match meeting.get("agenda").or_else(|| meeting.get("议程")) {
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| value_text(Some(item)))
+            .filter(|text| !text.is_empty())
+            .collect::<Vec<_>>()
+            .join("；"),
+        other => value_text(other),
+    };
     (!date.is_empty() || !agenda.is_empty()).then_some(NextMeeting { date, agenda })
 }
 
@@ -406,6 +419,13 @@ mod tests {
         let d = parse_step2_json(raw).unwrap();
         assert_eq!(d.title, "路灯会议");
         assert_eq!(d.decisions[0].content, "结案");
+        // agenda 为数组时用「；」拼接
+        let agenda = parse_step2_json(r#"{"next_meeting":{"agenda":["预算","排期"]}}"#)
+            .unwrap()
+            .next_meeting
+            .unwrap()
+            .agenda;
+        assert_eq!(agenda, "预算；排期");
     }
 
     #[test]
@@ -429,10 +449,43 @@ mod tests {
     }
 
     #[test]
+    fn strips_reasoning_preamble_before_json() {
+        assert_eq!(
+            parse_step2_json("首先\n{\"title\":\"A\"}").unwrap().title,
+            "A"
+        );
+        assert_eq!(
+            parse_step2_json("结论：{\"title\":\"A\"} 完毕")
+                .unwrap()
+                .title,
+            "A"
+        );
+    }
+
+    #[test]
+    fn keeps_marker_inside_json() {
+        // 标记出现在 JSON 内部时不得截断
+        assert_eq!(
+            parse_step2_json(r#"{"title":"A","decisions":[{"content":"首先确认方案"}]}"#)
+                .unwrap()
+                .decisions[0]
+                .content,
+            "首先确认方案"
+        );
+    }
+
+    #[test]
     fn parses_task_array_and_wrapped_object() {
         let arr = r#"[{"task_name":"跟进进度","责任人":"许日政","参与人":"杨朋","截止日期":"本周五"}]"#;
         assert_eq!(parse_step3_json(arr).len(), 1);
         let wrapped = r#"{"tasks":[{"task_name":"A"}]}"#;
         assert_eq!(parse_step3_json(wrapped)[0].task_name, "A");
+        // tasks 为 null 时回退到行动项；结束日期/help 也是合法 alias
+        let fallback = parse_step3_json(
+            r#"{"tasks":null,"行动项":[{"task_name":"B","结束日期":"下周一","help":"需设计支持"}]}"#,
+        );
+        assert_eq!(fallback[0].task_name, "B");
+        assert_eq!(fallback[0].deadline, "下周一");
+        assert_eq!(fallback[0].help_needed, "需设计支持");
     }
 }
