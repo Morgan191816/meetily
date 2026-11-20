@@ -1,5 +1,5 @@
 use log::{debug as log_debug, error as log_error, info as log_info, warn as log_warn};
-use crate::utils::url_origin_for_log;
+use crate::utils::{log_snippet, url_origin_for_log};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Runtime};
 
@@ -12,7 +12,7 @@ use crate::{
         },
     },
     state::AppState,
-    summary::CustomOpenAIConfig,
+    summary::{CustomOpenAIConfig, Protocol},
 };
 
 // Hardcoded server URL
@@ -1059,6 +1059,28 @@ pub async fn api_get_custom_openai_config<R: Runtime>(
     }
 }
 
+/// 校验测试连接响应是否符合所选协议：OpenAI 看 `choices[0].message`，Anthropic 看 `content[]` 文本块。
+fn protocol_response_is_compatible(protocol: Protocol, json: &serde_json::Value) -> bool {
+    match protocol {
+        Protocol::OpenAi => json
+            .get("choices")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|choices| choices.first())
+            .and_then(|choice| choice.get("message"))
+            .is_some_and(|message| {
+                message.get("content").is_some() || message.get("reasoning_content").is_some()
+            }),
+        Protocol::Anthropic => json
+            .get("content")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|blocks| {
+                blocks.iter().any(|block| {
+                    block.get("type").and_then(serde_json::Value::as_str) == Some("text")
+                })
+            }),
+    }
+}
+
 /// Tests the connection to a custom OpenAI-compatible endpoint
 /// Makes a minimal request to verify the endpoint is reachable and responds correctly
 #[tauri::command]
@@ -1067,24 +1089,23 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
     endpoint: String,
     api_key: Option<String>,
     model: String,
+    protocol: Option<Protocol>,
 ) -> Result<serde_json::Value, String> {
+    let protocol = protocol.unwrap_or_default();
     let endpoint_origin = url_origin_for_log(&endpoint);
     log_info!(
-        "Custom OpenAI connection test requested; endpoint_origin={}, model={}",
+        "Custom connection test requested; endpoint_origin={}, model={}, protocol={:?}",
         endpoint_origin,
-        model
+        model,
+        protocol
     );
 
     if !endpoint.starts_with("http://") && !endpoint.starts_with("https://") {
         return Err("接口地址必须以 http:// 或 https:// 开头".to_string());
     }
 
-    let url = format!("{}/chat/completions", endpoint.trim_end_matches('/'));
-    let test_request = serde_json::json!({
-        "model": model,
-        "messages": [{"role": "user", "content": "Hi"}],
-        "max_tokens": 5
-    });
+    let url = crate::summary::endpoint::chat_url(&endpoint, protocol);
+    let test_request = crate::summary::request::chat_body(protocol, &model, "", "ping", 8);
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
@@ -1095,7 +1116,9 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
         .json(&test_request);
 
     if let Some(key) = api_key.filter(|key| !key.trim().is_empty()) {
-        request = request.header("Authorization", format!("Bearer {}", key));
+        for (name, value) in crate::summary::request::auth_headers(protocol, key) {
+            request = request.header(name, value);
+        }
     }
 
     match request.send().await {
@@ -1103,7 +1126,7 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
             let status = response.status();
             let response_text = response.text().await.unwrap_or_default();
             log_info!(
-                "Custom OpenAI connection response; endpoint_origin={}, status={}, response_bytes={}",
+                "Custom connection response; endpoint_origin={}, status={}, response_bytes={}",
                 endpoint_origin,
                 status,
                 response_text.len()
@@ -1111,20 +1134,9 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
 
             if status.is_success() {
                 match serde_json::from_str::<serde_json::Value>(&response_text) {
-                    Ok(json) if json
-                        .get("choices")
-                        .and_then(serde_json::Value::as_array)
-                        .and_then(|choices| choices.first())
-                        .and_then(|choice| choice.get("message"))
-                        .and_then(|message| {
-                            message
-                                .get("content")
-                                .or_else(|| message.get("reasoning_content"))
-                        })
-                        .is_some() =>
-                    {
+                    Ok(json) if protocol_response_is_compatible(protocol, &json) => {
                         log_info!(
-                            "Custom OpenAI connection validated; endpoint_origin={}, status={}",
+                            "Custom connection validated; endpoint_origin={}, status={}",
                             endpoint_origin,
                             status
                         );
@@ -1136,33 +1148,44 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
                     }
                     Ok(_) => {
                         log_warn!(
-                            "Custom OpenAI response is not compatible; endpoint_origin={}, status={}",
+                            "Custom response is not compatible; endpoint_origin={}, status={}",
                             endpoint_origin,
                             status
                         );
-                        Err("接口可访问，但响应不像 OpenAI 兼容格式：缺少 'choices' 数组或 'message.content' / 'message.reasoning_content' 字段。".to_string())
+                        Err(match protocol {
+                            Protocol::OpenAi => "接口可访问，但响应不像 OpenAI 兼容格式：缺少 'choices' 数组或 'message.content' / 'message.reasoning_content' 字段。".to_string(),
+                            Protocol::Anthropic => "接口可访问，但响应不像 Anthropic 兼容格式：缺少 'content' 数组或 'text' 文本块。".to_string(),
+                        })
                     }
                     Err(error) => {
                         log_warn!(
-                            "Custom OpenAI response is invalid JSON; endpoint_origin={}, status={}",
+                            "Custom response is invalid JSON; endpoint_origin={}, status={}",
                             endpoint_origin,
                             status
                         );
-                        Err(format!("接口可访问，但返回的 JSON 无效：{}。响应：{}", error, response_text))
+                        Err(format!(
+                            "接口可访问，但返回的 JSON 无效：{}。响应：{}",
+                            error,
+                            log_snippet(&response_text, 200)
+                        ))
                     }
                 }
             } else {
                 log_warn!(
-                    "Custom OpenAI connection failed; endpoint_origin={}, status={}",
+                    "Custom connection failed; endpoint_origin={}, status={}",
                     endpoint_origin,
                     status
                 );
-                Err(format!("连接失败，状态码 {}：{}", status, response_text))
+                Err(format!(
+                    "连接失败，状态码 {}：{}",
+                    status,
+                    log_snippet(&response_text, 200)
+                ))
             }
         }
         Err(error) => {
             log_error!(
-                "Custom OpenAI connection request failed; endpoint_origin={}, error_class={}",
+                "Custom connection request failed; endpoint_origin={}, error_class={}",
                 endpoint_origin,
                 reqwest_error_class(&error)
             );
@@ -1175,6 +1198,89 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
             }
         }
     }
+}
+
+/// 从模型列表响应里取 `data[].id`，去重后按字典序排序。
+fn parse_models(body: &str) -> Result<Vec<String>, String> {
+    let value: serde_json::Value = serde_json::from_str(body)
+        .map_err(|error| format!("模型列表不是合法 JSON：{}", error))?;
+    let data = value
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .ok_or("模型列表响应缺少 data 数组")?;
+    let mut models: Vec<String> = data
+        .iter()
+        .filter_map(|item| item.get("id").and_then(serde_json::Value::as_str))
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty())
+        .collect();
+    models.sort();
+    models.dedup();
+    if models.is_empty() {
+        return Err("接口未返回任何模型，请检查地址或手动填写模型名".to_string());
+    }
+    Ok(models)
+}
+
+/// Lists the models exposed by a custom endpoint (`GET {base}/v1/models`).
+#[tauri::command]
+pub async fn api_list_custom_models(
+    endpoint: String,
+    api_key: Option<String>,
+    protocol: Option<Protocol>,
+) -> Result<Vec<String>, String> {
+    let protocol = protocol.unwrap_or_default();
+    let trimmed = endpoint.trim();
+    if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
+        return Err("接口地址必须以 http:// 或 https:// 开头".to_string());
+    }
+
+    let url = crate::summary::endpoint::models_url(trimmed);
+    log_info!(
+        "Custom model list requested; endpoint_origin={}, protocol={:?}",
+        url_origin_for_log(&url),
+        protocol
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|error| format!("创建 HTTP 客户端失败：{}", error))?;
+    let mut request = client.get(&url);
+    if let Some(key) = api_key.as_deref().filter(|key| !key.trim().is_empty()) {
+        for (name, value) in crate::summary::request::auth_headers(protocol, key) {
+            request = request.header(name, value);
+        }
+    }
+
+    let response = request
+        .send()
+        .await
+        .map_err(|error| format!("无法连接 {}：{}", url_origin_for_log(&url), error))?;
+    let status = response.status();
+    let body = response
+        .text()
+        .await
+        .map_err(|error| format!("读取模型列表响应失败：{}", error))?;
+
+    if status == reqwest::StatusCode::UNAUTHORIZED {
+        return Err("认证失败，请检查 API Key".to_string());
+    }
+    if !status.is_success() {
+        log_warn!(
+            "Custom model list failed; endpoint_origin={}, status={}, response_bytes={}",
+            url_origin_for_log(&url),
+            status,
+            body.len()
+        );
+        return Err(format!(
+            "获取模型列表失败（HTTP {}）：{}",
+            status.as_u16(),
+            log_snippet(&body, 200)
+        ));
+    }
+
+    parse_models(&body)
 }
 
 #[cfg(test)]
@@ -1202,5 +1308,26 @@ mod external_url_tests {
         ] {
             assert!(parse_external_url(raw).is_err(), "accepted {raw:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod custom_model_list_tests {
+    use super::parse_models;
+
+    #[test]
+    fn parses_openai_model_list() {
+        let body = r#"{"data":[{"id":"b"},{"id":"a"},{"id":"b"}]}"#;
+        assert_eq!(parse_models(body).unwrap(), vec!["a".to_string(), "b".to_string()]);
+    }
+
+    #[test]
+    fn empty_list_is_an_error() {
+        assert!(parse_models(r#"{"data":[]}"#).is_err());
+    }
+
+    #[test]
+    fn malformed_body_is_an_error() {
+        assert!(parse_models("not json").is_err());
     }
 }

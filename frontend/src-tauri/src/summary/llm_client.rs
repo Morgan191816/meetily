@@ -725,6 +725,67 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn anthropic_custom_endpoint_sends_anthropic_headers_and_parses_text() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let request = read_http_request(&mut stream).await;
+            let headers_end = request
+                .windows(4)
+                .position(|window| window == b"\r\n\r\n")
+                .unwrap();
+            let headers = String::from_utf8_lossy(&request[..headers_end]).to_ascii_lowercase();
+            assert!(headers.contains("x-api-key: sk-test"), "headers: {headers}");
+            assert!(headers.contains("anthropic-version: 2023-06-01"), "headers: {headers}");
+            assert!(!headers.contains("authorization:"), "headers: {headers}");
+            assert!(headers.starts_with("post /v1/messages "), "headers: {headers}");
+            let body = request_json(&request);
+            assert_eq!(body["system"], "system");
+            assert_eq!(body["messages"][0]["role"], "user");
+            assert_eq!(body["messages"][0]["content"], "user");
+
+            let response_body = br#"{"content":[{"type":"text","text":"ok"}]}"#;
+            let response_headers = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                response_body.len()
+            );
+            stream.write_all(response_headers.as_bytes()).await.unwrap();
+            stream.write_all(response_body).await.unwrap();
+            stream.flush().await.unwrap();
+        });
+
+        let endpoint = format!("http://{address}");
+        let completion = generate_summary(
+            &Client::new(),
+            &LLMProvider::CustomOpenAI,
+            "model",
+            "sk-test",
+            "system",
+            "user",
+            None,
+            Some(&endpoint),
+            Protocol::Anthropic,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        server.await.unwrap();
+
+        assert_eq!(
+            completion,
+            LlmCompletion {
+                content: "ok".to_string(),
+                reasoning_stripped: false,
+            }
+        );
+    }
+
+    #[tokio::test]
     async fn cancellation_prevents_compatibility_io_from_being_polled() {
         let cancellation_token = CancellationToken::new();
         cancellation_token.cancel();
