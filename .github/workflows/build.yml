@@ -606,7 +606,7 @@ jobs:
             target/${{ inputs.target }}/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.app
             target/${{ inputs.target }}/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.app.tar.gz
             target/${{ inputs.target }}/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.app.tar.gz.sig
-          retention-days: 30
+          retention-days: 1
 
       - name: Remove libwayland-client.so from AppImage
         if: contains(inputs.platform, 'ubuntu')
@@ -689,7 +689,7 @@ jobs:
             target/${{ steps.build-profile.outputs.profile }}/bundle/deb/*.deb
             target/${{ steps.build-profile.outputs.profile }}/bundle/appimage/*.AppImage
             target/${{ steps.build-profile.outputs.profile }}/bundle/rpm/*.rpm
-          retention-days: 30
+          retention-days: 1
 
       - name: Upload artifacts (Windows)
         if: inputs.upload-artifacts && contains(inputs.platform, 'windows')
@@ -701,4 +701,4 @@ jobs:
             target/${{ steps.build-profile.outputs.profile }}/bundle/msi/*.msi.sig
             target/${{ steps.build-profile.outputs.profile }}/bundle/nsis/*.exe
             target/${{ steps.build-profile.outputs.profile }}/bundle/nsis/*.exe.sig
-          retention-days: 30
+          retention-days: 1

@@ -326,7 +326,7 @@ jobs:
             target/x86_64-unknown-linux-gnu/${{ steps.build-profile.outputs.profile }}/bundle/deb/*.deb
             target/x86_64-unknown-linux-gnu/${{ steps.build-profile.outputs.profile }}/bundle/appimage/*.AppImage
             target/x86_64-unknown-linux-gnu/${{ steps.build-profile.outputs.profile }}/bundle/rpm/*.rpm
-          retention-days: 30
+          retention-days: 1
 
       - name: Generate build summary
         run: |

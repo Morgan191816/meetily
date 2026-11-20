@@ -239,7 +239,7 @@ jobs:
             target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.app
             target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.app.tar.gz
             target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.app.tar.gz.sig
-          retention-days: 30
+          retention-days: 1
 
       - name: Generate build summary
         run: |
