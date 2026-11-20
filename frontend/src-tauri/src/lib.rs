@@ -49,6 +49,7 @@ pub mod onboarding;
 pub mod openai;
 pub mod anthropic;
 pub mod groq;
+pub mod minutes;
 pub mod openrouter;
 pub mod state;
 pub mod summary;
