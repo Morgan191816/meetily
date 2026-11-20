@@ -165,6 +165,8 @@ export function ModelSettingsModal({
   const [isFetchingCustomModels, setIsFetchingCustomModels] = useState<boolean>(false);
   const [customModelsError, setCustomModelsError] = useState<string>('');
   const [isManualModelInput, setIsManualModelInput] = useState<boolean>(true);
+  // 拉取代次：切协议/改地址后递增，丢弃在途响应，避免旧结果回填
+  const fetchSeq = useRef<number>(0);
 
   // Combobox state
   const [modelComboboxOpen, setModelComboboxOpen] = useState<boolean>(false);
@@ -635,6 +637,12 @@ export function ModelSettingsModal({
       }
     }
 
+    // Anthropic 温度上限 1.0，手键超限会让网关返回 4xx
+    const customTemperatureValue = customTemperature ? parseFloat(customTemperature) : null;
+    const temperature = customProtocol === 'anthropic' && customTemperatureValue !== null
+      ? Math.min(customTemperatureValue, 1)
+      : customTemperatureValue;
+
     const updatedConfig = {
       ...modelConfig,
       apiKey: typeof apiKey === 'string' ? apiKey.trim() || null : null,
@@ -646,13 +654,17 @@ export function ModelSettingsModal({
       customOpenAIModel: modelConfig.provider === 'custom-openai' ? customOpenAIModel.trim() : null,
       customOpenAIApiKey: modelConfig.provider === 'custom-openai' && customOpenAIApiKey.trim() ? customOpenAIApiKey.trim() : null,
       maxTokens: modelConfig.provider === 'custom-openai' && customMaxTokens ? parseInt(customMaxTokens, 10) : null,
-      temperature: modelConfig.provider === 'custom-openai' && customTemperature ? parseFloat(customTemperature) : null,
+      temperature: modelConfig.provider === 'custom-openai' ? temperature : null,
       topP: modelConfig.provider === 'custom-openai' && customTopP ? parseFloat(customTopP) : null,
       // For custom-openai, use the customOpenAIModel as the model field
       model: modelConfig.provider === 'custom-openai' ? customOpenAIModel.trim() : modelConfig.model,
     };
     setModelConfig(updatedConfig);
-    console.log('ModelSettingsModal - handleSave - Updated ModelConfig:', updatedConfig);
+    console.log('ModelSettingsModal - handleSave - 保存配置', {
+      provider: updatedConfig.provider,
+      model: updatedConfig.model,
+      hasApiKey: Boolean(updatedConfig.customOpenAIApiKey),
+    });
 
     // Persist confirmed model choice to per-provider cache
     if (updatedConfig.model) {
@@ -672,6 +684,7 @@ export function ModelSettingsModal({
   // 切协议：旧协议下的模型与列表不再适用，清空已选模型但保留 URL 与 Key
   const handleCustomProtocolChange = (protocol: 'openai' | 'anthropic') => {
     if (protocol === customProtocol) return;
+    fetchSeq.current++;
     setCustomProtocol(protocol);
     setCustomOpenAIModel('');
     setCustomModels([]);
@@ -689,6 +702,7 @@ export function ModelSettingsModal({
       setCustomModelsError('请先填写接口地址');
       return;
     }
+    const seq = ++fetchSeq.current;
     setIsFetchingCustomModels(true);
     setCustomModelsError('');
     try {
@@ -697,10 +711,12 @@ export function ModelSettingsModal({
         apiKey: customOpenAIApiKey.trim() || null,
         protocol: customProtocol,
       })) as string[];
+      if (seq !== fetchSeq.current) return;
       setCustomModels(list);
       setIsManualModelInput(false);
       setCustomOpenAIModel((current) => (list.includes(current) ? current : list[0] ?? current));
     } catch (err) {
+      if (seq !== fetchSeq.current) return;
       // 后端错误串只含 endpoint origin 与响应片段，不含 Key；失败时保持手动输入
       setCustomModelsError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -1010,7 +1026,12 @@ export function ModelSettingsModal({
                 <Input
                   id="custom-endpoint"
                   value={customOpenAIEndpoint}
-                  onChange={(e) => setCustomOpenAIEndpoint(e.target.value)}
+                  onChange={(e) => {
+                    fetchSeq.current++;
+                    setCustomOpenAIEndpoint(e.target.value);
+                    setCustomModels([]);
+                    setCustomModelsError('');
+                  }}
                   placeholder="http://localhost:8000/v1"
                   className="flex-1"
                 />

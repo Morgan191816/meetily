@@ -1,6 +1,16 @@
 import { afterAll, afterEach, expect, mock, test } from 'bun:test';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
+// bun test 环境没有 localStorage；组件在保存时会写 providerModelMap 缓存
+if (typeof (globalThis as any).localStorage === 'undefined') {
+  const store = new Map<string, string>();
+  (globalThis as any).localStorage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => { store.set(key, value); },
+    removeItem: (key: string) => { store.delete(key); },
+  };
+}
+
 const mockedPaths = [
   '@tauri-apps/api/core',
   'sonner',
@@ -14,9 +24,11 @@ const originals = await Promise.all(mockedPaths.map(async path =>
 afterAll(() => { for (const [path, exports] of originals) mock.module(path, () => exports); });
 
 let listModelsFails = false;
+let listModelsGate: Promise<void> | null = null;
 const invoke = mock(async (command: string, args?: unknown) => {
   if (command === 'api_list_custom_models') {
     if (listModelsFails) throw '无法连接 http://gw:4000：connection refused';
+    if (listModelsGate) await listModelsGate;
     return ['claude-a', 'claude-b'];
   }
   return undefined;
@@ -62,6 +74,7 @@ afterEach(async () => {
   if (renderer) await act(async () => renderer!.unmount());
   renderer = undefined;
   listModelsFails = false;
+  listModelsGate = null;
 });
 
 async function renderModal() {
@@ -90,10 +103,12 @@ function instanceText(node: ReactTestInstance): string {
   return node.children.map(child => typeof child === 'string' ? child : instanceText(child)).join('');
 }
 
+function findButton(text: string) {
+  return renderer!.root.findAllByType('button').find(node => instanceText(node).includes(text));
+}
+
 async function clickFetchModels() {
-  const button = renderer!.root.findAllByType('button').find(node =>
-    instanceText(node).includes('获取模型'));
-  await act(async () => { await button!.props.onClick(); });
+  await act(async () => { await findButton('获取模型')!.props.onClick(); });
 }
 
 test('切换协议会清空已选模型并显示协议提示', async () => {
@@ -143,4 +158,37 @@ test('拉取成功用当前协议并把模型填入下拉', async () => {
   const json = JSON.stringify(renderer!.toJSON());
   expect(json).toContain('claude-a');
   expect(json).toContain('claude-b');
+});
+
+test('拉取在途时切协议，旧结果不回填', async () => {
+  let release!: () => void;
+  listModelsGate = new Promise<void>(resolve => { release = resolve; });
+  await renderModal();
+
+  let fetchDone!: Promise<void>;
+  await act(async () => {
+    fetchDone = findButton('获取模型')!.props.onClick();
+    await Promise.resolve();
+  });
+  await selectProtocol('anthropic');
+  await act(async () => { release(); await fetchDone; });
+
+  expect(inputById('custom-model')!.props.value).toBe('');
+  expect(JSON.stringify(renderer!.toJSON())).not.toContain('claude-a');
+});
+
+test('保存时把当前协议传给保存命令', async () => {
+  await renderModal();
+  await selectProtocol('anthropic');
+  await act(async () => {
+    inputById('custom-model')!.props.onChange({ target: { value: 'claude-a' } });
+  });
+  await act(async () => { await findButton('保存')!.props.onClick(); });
+
+  const calls = invoke.mock.calls.filter(([command]) => command === 'api_save_custom_openai_config');
+  expect(calls.at(-1)![1]).toMatchObject({
+    endpoint: 'http://gw:4000',
+    model: 'claude-a',
+    protocol: 'anthropic',
+  });
 });
