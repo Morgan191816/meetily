@@ -1116,7 +1116,7 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
         .json(&test_request);
 
     if let Some(key) = api_key.filter(|key| !key.trim().is_empty()) {
-        for (name, value) in crate::summary::request::auth_headers(protocol, key) {
+        for (name, value) in crate::summary::request::auth_headers(protocol, &key) {
             request = request.header(name, value);
         }
     }
