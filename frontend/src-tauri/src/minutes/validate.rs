@@ -534,12 +534,18 @@ mod tests {
             &[TaskItem {
                 task_name: "a".into(),
                 owner: "".into(),
+                // 补上合法日期，否则失败可能来自「截止日期为空」而非责任人规则
+                deadline: "2026-08-10".into(),
                 ..Default::default()
             }],
             &members,
             today(),
         );
         assert!(!bad.pass);
+        assert!(bad
+            .issues
+            .iter()
+            .any(|i| i.level == "error" && i.field == "责任人"));
 
         let unknown = validate_tasks(
             &[TaskItem {
@@ -564,12 +570,37 @@ mod tests {
             &[TaskItem {
                 task_name: "a".into(),
                 owner: "张三,李四".into(),
+                deadline: "2026-08-10".into(),
                 ..Default::default()
             }],
             &[],
             today(),
         );
         assert!(!out.pass);
+        assert!(out
+            .issues
+            .iter()
+            .any(|i| i.level == "error" && i.field == "责任人"));
+    }
+
+    #[test]
+    fn unparseable_deadline_is_error() {
+        // 计划偏离第 8 条：不存在的日期按「无法识别」报 error
+        let out = validate_tasks(
+            &[TaskItem {
+                task_name: "a".into(),
+                owner: "许日政".into(),
+                deadline: "2026-02-30".into(),
+                ..Default::default()
+            }],
+            &[],
+            today(),
+        );
+        assert!(!out.pass);
+        assert!(out
+            .issues
+            .iter()
+            .any(|i| i.level == "error" && i.field == "截止日期"));
     }
 
     #[test]
