@@ -2,7 +2,8 @@
 
 use crate::audio::decoder::decode_audio_file;
 use crate::audio::transcription::{
-    get_or_init_transcription_engine, TranscriptResult, TranscriptionEngine,
+    get_or_init_transcription_engine, term_correction::correct_terms, TranscriptResult,
+    TranscriptionEngine,
 };
 use crate::audio::vad::get_speech_chunks_with_progress;
 use super::common::{create_transcript_segments, split_segment_at_silence, write_transcripts_json};
@@ -378,7 +379,7 @@ async fn run_retranscription<R: Runtime>(
         };
 
         // Skip empty transcripts
-        let text = result.text;
+        let text = correct_terms(&result.text);
         let trimmed = text.trim();
         if !trimmed.is_empty() {
             debug!(

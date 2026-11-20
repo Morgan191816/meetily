@@ -3,7 +3,8 @@
     "resources": {
       "templates": "templates",
       "binaries/onnxruntime": ".",
-      "resources/terms.json": "resources/terms.json"
+      "resources/terms.json": "resources/terms.json",
+      "resources/THIRD-PARTY-NOTICES.md": "resources/THIRD-PARTY-NOTICES.md"
     }
   }
 }

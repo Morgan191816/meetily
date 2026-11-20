@@ -60,6 +60,14 @@ impl TermCorrector {
     }
 }
 
+/// 统一入口：实时、导入、重新转写三条路径共用。
+pub(crate) fn correct_terms(text: &str) -> String {
+    TERM_CORRECTOR
+        .get()
+        .map(|c| c.correct(text))
+        .unwrap_or_else(|| text.to_string())
+}
+
 fn collect(value: &serde_json::Value, out: &mut Vec<(String, String)>) {
     match value {
         serde_json::Value::Object(map) => {
@@ -150,6 +158,15 @@ mod tests {
     fn empty_or_invalid_json_yields_identity() {
         assert_eq!(TermCorrector::from_json("not json").correct("原文"), "原文");
         assert_eq!(TermCorrector::from_json("{}").correct("原文"), "原文");
+    }
+
+    #[test]
+    fn longer_alias_wins_over_prefix_alias() {
+        let c = TermCorrector::from_json(
+            r#"{"a":{"东软载波":{"correct":"东软载波","aliases":["东软","东软载播"]}}}"#,
+        );
+        assert_eq!(c.correct("东软载播"), "东软载波");
+        assert_eq!(c.correct("东软"), "东软载波");
     }
 
     #[test]

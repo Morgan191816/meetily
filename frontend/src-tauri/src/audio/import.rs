@@ -3,7 +3,8 @@
 use crate::api::TranscriptSegment;
 use crate::audio::decoder::{decode_audio_file, decode_audio_file_with_progress};
 use crate::audio::transcription::{
-    get_or_init_transcription_engine, TranscriptResult, TranscriptionEngine,
+    get_or_init_transcription_engine, term_correction::correct_terms, TranscriptResult,
+    TranscriptionEngine,
 };
 use crate::audio::vad::get_speech_chunks_with_progress;
 use crate::state::AppState;
@@ -587,7 +588,7 @@ async fn run_import<R: Runtime>(
                 .map_err(|e| anyhow!("第 {} 段转写失败：{}", i, e))?,
         };
 
-        let text = result.text;
+        let text = correct_terms(&result.text);
         let trimmed = text.trim();
         if !trimmed.is_empty() {
             debug!(

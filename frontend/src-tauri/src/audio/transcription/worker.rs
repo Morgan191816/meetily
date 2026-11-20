@@ -246,10 +246,7 @@ pub fn start_transcription_task<R: Runtime>(
                         match transcribe_chunk_with_provider(&engine_clone, chunk, &app_clone).await {
                             Ok((transcript, confidence_opt, is_partial)) => {
                                 // 术语纠正必须早于 should_emit_transcript 与 transcript-update 事件
-                                let transcript = super::term_correction::TERM_CORRECTOR
-                                    .get()
-                                    .map(|corrector| corrector.correct(&transcript))
-                                    .unwrap_or(transcript);
+                                let transcript = super::term_correction::correct_terms(&transcript);
 
                                 if let Some(confidence) = confidence_opt {
                                     stats.confidence_total += confidence as f64;

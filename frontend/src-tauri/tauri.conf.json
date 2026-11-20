@@ -103,7 +103,8 @@
         ],
         "resources": [
             "templates/*.json",
-            "resources/terms.json"
+            "resources/terms.json",
+            "resources/THIRD-PARTY-NOTICES.md"
         ],
         "externalBin": [
             "binaries/ffmpeg"
