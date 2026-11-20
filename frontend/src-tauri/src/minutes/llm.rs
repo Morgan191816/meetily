@@ -454,6 +454,10 @@ mod tests {
             parse_step2_json("首先\n{\"title\":\"A\"}").unwrap().title,
             "A"
         );
+    }
+
+    #[test]
+    fn scans_past_surrounding_prose() {
         assert_eq!(
             parse_step2_json("结论：{\"title\":\"A\"} 完毕")
                 .unwrap()
