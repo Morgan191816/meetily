@@ -14,11 +14,10 @@ pub fn auth_headers(protocol: Protocol, api_key: &str) -> Vec<(&'static str, Str
     }
 }
 
-pub fn default_max_tokens(protocol: Protocol) -> i32 {
-    match protocol {
-        Protocol::Anthropic => 8192,
-        Protocol::OpenAi => 2048,
-    }
+/// 两种协议都给 8192：推理型模型（如 PakClaw-Max）的 reasoning 内容会先吃掉预算，
+/// 2048 时正文可能被截成空串（Phase 3.5 装机验收实测）。
+pub fn default_max_tokens(_protocol: Protocol) -> i32 {
+    8192
 }
 
 pub fn chat_body(protocol: Protocol, model: &str, system: &str, user: &str, max_tokens: i32) -> Value {
@@ -79,8 +78,9 @@ mod tests {
     }
 
     #[test]
-    fn anthropic_default_max_tokens_is_8192() {
+    fn default_max_tokens_leaves_room_for_reasoning_models() {
+        // 推理型模型先输出 reasoning 再输出正文，2048 会把正文挤成空串
         assert_eq!(default_max_tokens(Protocol::Anthropic), 8192);
-        assert_eq!(default_max_tokens(Protocol::OpenAi), 2048);
+        assert_eq!(default_max_tokens(Protocol::OpenAi), 8192);
     }
 }
