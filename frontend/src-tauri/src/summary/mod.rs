@@ -48,6 +48,7 @@ pub(crate) mod language_detection;
 pub mod llm_client;
 pub(crate) mod metadata;
 pub mod processor;
+pub mod request;
 pub mod service;
 pub mod template_commands;
 pub mod templates;
