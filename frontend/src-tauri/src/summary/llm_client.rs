@@ -5,6 +5,10 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use log::{info, warn};
 
+use super::endpoint::chat_url;
+use super::request::{auth_headers, chat_body, default_max_tokens};
+use super::Protocol;
+
 const REQUEST_TIMEOUT_DURATION: Duration = Duration::from_secs(300);
 
 async fn await_or_cancel<T>(
@@ -250,6 +254,7 @@ impl LLMProvider {
 /// * `user_prompt` - User query/content to process
 /// * `ollama_endpoint` - Optional custom Ollama endpoint (defaults to localhost:11434)
 /// * `custom_openai_endpoint` - Optional custom OpenAI-compatible endpoint
+/// * `custom_openai_protocol` - Protocol used by the custom endpoint (OpenAI or Anthropic)
 /// * `max_tokens` - Optional max tokens (for CustomOpenAI provider)
 /// * `temperature` - Optional temperature (for CustomOpenAI provider)
 /// * `top_p` - Optional top_p (for CustomOpenAI provider)
@@ -265,6 +270,7 @@ pub(crate) async fn generate_summary(
     user_prompt: &str,
     ollama_endpoint: Option<&str>,
     custom_openai_endpoint: Option<&str>,
+    custom_openai_protocol: Protocol,
     max_tokens: Option<u32>,
     temperature: Option<f32>,
     top_p: Option<f32>,
@@ -302,10 +308,18 @@ pub(crate) async fn generate_summary(
         LLMProvider::CustomOpenAI => {
             let endpoint = custom_openai_endpoint
                 .ok_or_else(|| "Custom OpenAI endpoint not configured".to_string())?;
-            (
-                format!("{}/chat/completions", endpoint.trim_end_matches('/')),
-                header::HeaderMap::new(),
-            )
+            let mut header_map = header::HeaderMap::new();
+            for (name, value) in auth_headers(custom_openai_protocol, api_key) {
+                // 错误串只提头名，绝不回显 Key
+                header_map.insert(
+                    header::HeaderName::from_bytes(name.as_bytes())
+                        .map_err(|_| format!("Invalid auth header name: {name}"))?,
+                    value
+                        .parse()
+                        .map_err(|_| format!("Invalid value for auth header: {name}"))?,
+                );
+            }
+            (chat_url(endpoint, custom_openai_protocol), header_map)
         }
         LLMProvider::Claude => {
             let mut header_map = header::HeaderMap::new();
@@ -325,8 +339,9 @@ pub(crate) async fn generate_summary(
         }
     };
 
-    // Add authorization header for non-Claude providers
-    if provider != &LLMProvider::Claude {
+    // Add authorization header for non-Claude providers.
+    // 自定义端点的鉴权头已由 auth_headers 按协议生成，这里不能再补 Bearer（否则 Anthropic 会串味）。
+    if provider != &LLMProvider::Claude && provider != &LLMProvider::CustomOpenAI {
         headers.insert(
             header::AUTHORIZATION,
             format!("Bearer {}", api_key)
@@ -342,18 +357,8 @@ pub(crate) async fn generate_summary(
     );
 
     // Build request body based on provider
-    let request_body = if provider != &LLMProvider::Claude {
-        build_openai_compat_chat_body(
-            provider,
-            model_name,
-            system_prompt,
-            user_prompt,
-            max_tokens,
-            temperature,
-            top_p,
-        )
-    } else {
-        serde_json::json!(ClaudeRequest {
+    let request_body = match provider {
+        LLMProvider::Claude => serde_json::json!(ClaudeRequest {
             system: system_prompt.to_string(),
             model: model_name.to_string(),
             // Shared budget: on models with thinking enabled by default this
@@ -363,7 +368,37 @@ pub(crate) async fn generate_summary(
                 role: "user".to_string(),
                 content: user_prompt.to_string(),
             }]
-        })
+        }),
+        LLMProvider::CustomOpenAI => {
+            let mut body = chat_body(
+                custom_openai_protocol,
+                model_name,
+                system_prompt,
+                user_prompt,
+                max_tokens
+                    .map(|tokens| tokens as i32)
+                    .unwrap_or_else(|| default_max_tokens(custom_openai_protocol)),
+            );
+            // 采样参数沿用设置里的值（两种协议都接受顶层 temperature / top_p）
+            if let Some(object) = body.as_object_mut() {
+                if let Some(temperature) = temperature {
+                    object.insert("temperature".to_string(), serde_json::json!(temperature));
+                }
+                if let Some(top_p) = top_p {
+                    object.insert("top_p".to_string(), serde_json::json!(top_p));
+                }
+            }
+            body
+        }
+        _ => build_openai_compat_chat_body(
+            provider,
+            model_name,
+            system_prompt,
+            user_prompt,
+            max_tokens,
+            temperature,
+            top_p,
+        ),
     };
 
     info!("🐞 LLM Request to {}: model={}", provider_name(provider), model_name);
@@ -461,8 +496,12 @@ pub(crate) async fn generate_summary(
         ));
     }
 
-    // Parse response based on provider
-    if provider == &LLMProvider::Claude {
+    // Parse response based on provider: Claude 与 Anthropic 协议的自定义端点用 content[0].text，
+    // 其余用 choices[0].message.content。
+    let anthropic_response = provider == &LLMProvider::Claude
+        || (provider == &LLMProvider::CustomOpenAI
+            && custom_openai_protocol == Protocol::Anthropic);
+    if anthropic_response {
         let chat_response = await_or_cancel(
             response.json::<ClaudeChatResponse>(),
             cancellation_token,
@@ -470,7 +509,7 @@ pub(crate) async fn generate_summary(
         .await?
         .map_err(|e| format!("解析 LLM 响应失败：{}", e))?;
 
-        info!("🐞 LLM Response received from Claude");
+        info!("🐞 LLM Response received from {}", provider_name(provider));
 
         let completion = chat_response
             .completion()
@@ -672,6 +711,7 @@ mod tests {
             "user",
             None,
             Some(&endpoint),
+            Protocol::OpenAi,
             None,
             None,
             None,
@@ -682,6 +722,67 @@ mod tests {
         server.await.unwrap();
 
         assert!(error.contains("REMOTE_BODY_SECRET"));
+    }
+
+    #[tokio::test]
+    async fn anthropic_custom_endpoint_sends_anthropic_headers_and_parses_text() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let request = read_http_request(&mut stream).await;
+            let headers_end = request
+                .windows(4)
+                .position(|window| window == b"\r\n\r\n")
+                .unwrap();
+            let headers = String::from_utf8_lossy(&request[..headers_end]).to_ascii_lowercase();
+            assert!(headers.contains("x-api-key: sk-test"), "headers: {headers}");
+            assert!(headers.contains("anthropic-version: 2023-06-01"), "headers: {headers}");
+            assert!(!headers.contains("authorization:"), "headers: {headers}");
+            assert!(headers.starts_with("post /v1/messages "), "headers: {headers}");
+            let body = request_json(&request);
+            assert_eq!(body["system"], "system");
+            assert_eq!(body["messages"][0]["role"], "user");
+            assert_eq!(body["messages"][0]["content"], "user");
+
+            let response_body = br#"{"content":[{"type":"text","text":"ok"}]}"#;
+            let response_headers = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                response_body.len()
+            );
+            stream.write_all(response_headers.as_bytes()).await.unwrap();
+            stream.write_all(response_body).await.unwrap();
+            stream.flush().await.unwrap();
+        });
+
+        let endpoint = format!("http://{address}");
+        let completion = generate_summary(
+            &Client::new(),
+            &LLMProvider::CustomOpenAI,
+            "model",
+            "sk-test",
+            "system",
+            "user",
+            None,
+            Some(&endpoint),
+            Protocol::Anthropic,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        server.await.unwrap();
+
+        assert_eq!(
+            completion,
+            LlmCompletion {
+                content: "ok".to_string(),
+                reasoning_stripped: false,
+            }
+        );
     }
 
     #[tokio::test]
@@ -755,6 +856,7 @@ mod tests {
             "user",
             Some(&endpoint),
             None,
+            Protocol::OpenAi,
             None,
             None,
             None,
@@ -840,6 +942,7 @@ mod tests {
             "user",
             Some(&endpoint),
             None,
+            Protocol::OpenAi,
             None,
             None,
             None,
@@ -917,6 +1020,7 @@ mod tests {
                 "user",
                 Some(&endpoint),
                 None,
+                Protocol::OpenAi,
                 None,
                 None,
                 None,

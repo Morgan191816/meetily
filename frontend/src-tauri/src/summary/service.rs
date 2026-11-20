@@ -9,6 +9,7 @@ use crate::summary::processor::{
     language_name_from_code, require_visible_markdown,
 };
 use crate::summary::templates::{self, Template};
+use crate::summary::Protocol;
 use crate::ollama::metadata::ModelMetadataCache;
 use crate::utils::url_origin_for_log;
 use chrono::{DateTime, Utc};
@@ -392,7 +393,7 @@ impl SummaryService {
         };
 
         // Get CustomOpenAI config if provider is CustomOpenAI
-        let (custom_openai_endpoint, custom_openai_api_key, custom_openai_max_tokens, custom_openai_temperature, custom_openai_top_p) =
+        let (custom_openai_endpoint, custom_openai_api_key, custom_openai_max_tokens, custom_openai_temperature, custom_openai_top_p, custom_openai_protocol) =
             if provider == LLMProvider::CustomOpenAI {
                 match SettingsRepository::get_custom_openai_config(&pool).await {
                     Ok(Some(config)) => {
@@ -406,6 +407,7 @@ impl SummaryService {
                             config.max_tokens.map(|t| t as u32),
                             config.temperature,
                             config.top_p,
+                            config.protocol,
                         )
                     }
                     Ok(None) => {
@@ -420,7 +422,7 @@ impl SummaryService {
                     }
                 }
             } else {
-                (None, None, None, None, None)
+                (None, None, None, None, None, Protocol::default())
             };
 
         // For CustomOpenAI, use its API key (if any) instead of the empty string
@@ -533,6 +535,7 @@ impl SummaryService {
             token_threshold,
             ollama_endpoint.as_deref(),
             custom_openai_endpoint.as_deref(),
+            custom_openai_protocol,
             custom_openai_max_tokens,
             custom_openai_temperature,
             custom_openai_top_p,

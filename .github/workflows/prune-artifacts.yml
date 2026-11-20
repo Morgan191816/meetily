@@ -1,0 +1,37 @@
+name: "Prune Artifacts"
+
+# 免费账户 Actions 存储只有 0.5 GB，单个安装包 ~100 MB。
+# retention-days 只管年龄，管不住「一天内多次出包」的累积，所以再加一层总量阈值清理。
+on:
+  schedule:
+    - cron: '0 3 * * *' # 每天 UTC 03:00
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Delete oldest artifacts until under threshold
+        env:
+          GH_TOKEN: ${{ github.token }}
+          THRESHOLD_MB: '250'
+        run: |
+          set -euo pipefail
+          threshold=$((THRESHOLD_MB * 1024 * 1024))
+          total=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" --jq '[.artifacts[].size_in_bytes] | add // 0')
+          echo "当前产物总量：$((total / 1024 / 1024)) MB，阈值：${THRESHOLD_MB} MB"
+          while [ "$total" -gt "$threshold" ]; do
+            row=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+              --jq '.artifacts | sort_by(.created_at) | first | "\(.id) \(.size_in_bytes) \(.name)"')
+            [ -z "$row" ] && break
+            set -- $row
+            echo "删除最旧产物：$3（$(( $2 / 1024 / 1024 )) MB）"
+            gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$1"
+            total=$((total - $2))
+          done
+          echo "剩余：$((total / 1024 / 1024)) MB"

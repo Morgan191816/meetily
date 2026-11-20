@@ -1,5 +1,6 @@
 use crate::summary::llm_client::{generate_summary, LLMProvider};
 use crate::summary::templates::Template;
+use crate::summary::Protocol;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use reqwest::Client;
@@ -371,6 +372,7 @@ pub(crate) async fn generate_meeting_summary(
     token_threshold: usize,
     ollama_endpoint: Option<&str>,
     custom_openai_endpoint: Option<&str>,
+    custom_openai_protocol: Protocol,
     max_tokens: Option<u32>,
     temperature: Option<f32>,
     top_p: Option<f32>,
@@ -406,8 +408,8 @@ pub(crate) async fn generate_meeting_summary(
                     for attempt in 1..=MAX_CHUNK_ATTEMPTS {
                         let result = match generate_summary(
                             client, provider, model_name, api_key, "You are an expert meeting summarizer.",
-                            &prompt, ollama_endpoint, custom_openai_endpoint, max_tokens, temperature,
-                            top_p, cancellation_token,
+                            &prompt, ollama_endpoint, custom_openai_endpoint, custom_openai_protocol,
+                            max_tokens, temperature, top_p, cancellation_token,
                         )
                         .await
                         {
@@ -469,8 +471,8 @@ pub(crate) async fn generate_meeting_summary(
                     let completion = generate_summary(
                         client, provider, model_name, api_key,
                         "You are an expert at synthesizing meeting summaries.", &prompt,
-                        ollama_endpoint, custom_openai_endpoint, max_tokens, temperature, top_p,
-                        cancellation_token,
+                        ollama_endpoint, custom_openai_endpoint, custom_openai_protocol, max_tokens,
+                        temperature, top_p, cancellation_token,
                     )
                     .await?;
                     let cleaned = clean_llm_markdown_detailed(&completion.content);
@@ -497,8 +499,8 @@ pub(crate) async fn generate_meeting_summary(
             }
             let completion = generate_summary(
                 client, provider, model_name, api_key, &final_system_prompt, &final_user_prompt,
-                ollama_endpoint, custom_openai_endpoint, max_tokens, temperature, top_p,
-                cancellation_token,
+                ollama_endpoint, custom_openai_endpoint, custom_openai_protocol, max_tokens,
+                temperature, top_p, cancellation_token,
             )
             .await?;
             let cleaned = clean_llm_markdown_detailed(&completion.content);
@@ -512,8 +514,8 @@ pub(crate) async fn generate_meeting_summary(
             FinalLanguageAction::Translate(language) => {
                 let translated = translate_markdown(
                     client, provider, model_name, api_key, &english_markdown, language,
-                    ollama_endpoint, custom_openai_endpoint, max_tokens, temperature, top_p,
-                    cancellation_token,
+                    ollama_endpoint, custom_openai_endpoint, custom_openai_protocol, max_tokens,
+                    temperature, top_p, cancellation_token,
                 )
                 .await
                 .map_err(|error| format!("Translation to {language} failed: {error}"))?;
@@ -525,8 +527,8 @@ pub(crate) async fn generate_meeting_summary(
                     &english_markdown,
                     normalize_markdown_to_english(
                         client, provider, model_name, api_key, &english_markdown, ollama_endpoint,
-                        custom_openai_endpoint, max_tokens, temperature, top_p,
-                        cancellation_token,
+                        custom_openai_endpoint, custom_openai_protocol, max_tokens, temperature,
+                        top_p, cancellation_token,
                     )
                     .await,
                     cancellation_token,
@@ -558,6 +560,7 @@ async fn run_markdown_transform(
     failure_label: &str,
     ollama_endpoint: Option<&str>,
     custom_openai_endpoint: Option<&str>,
+    custom_openai_protocol: Protocol,
     max_tokens: Option<u32>,
     temperature: Option<f32>,
     top_p: Option<f32>,
@@ -568,7 +571,8 @@ async fn run_markdown_transform(
     }
     let completion = generate_summary(
         client, provider, model_name, api_key, system_prompt, user_prompt, ollama_endpoint,
-        custom_openai_endpoint, max_tokens, temperature, top_p, cancellation_token,
+        custom_openai_endpoint, custom_openai_protocol, max_tokens, temperature, top_p,
+        cancellation_token,
     )
     .await
     .map_err(|error| format!("{failure_label} failed: {error}"))?;
@@ -587,6 +591,7 @@ async fn translate_markdown(
     target_language: &str,
     ollama_endpoint: Option<&str>,
     custom_openai_endpoint: Option<&str>,
+    custom_openai_protocol: Protocol,
     max_tokens: Option<u32>,
     temperature: Option<f32>,
     top_p: Option<f32>,
@@ -598,8 +603,8 @@ async fn translate_markdown(
     );
     let cleaned = run_markdown_transform(
         client, provider, model_name, api_key, &system_prompt, &user_prompt, "Translation pass",
-        ollama_endpoint, custom_openai_endpoint, max_tokens, temperature, top_p,
-        cancellation_token,
+        ollama_endpoint, custom_openai_endpoint, custom_openai_protocol, max_tokens, temperature,
+        top_p, cancellation_token,
     )
     .await?;
     require_visible_markdown("翻译结果", &cleaned)?;
@@ -615,6 +620,7 @@ async fn normalize_markdown_to_english(
     markdown: &str,
     ollama_endpoint: Option<&str>,
     custom_openai_endpoint: Option<&str>,
+    custom_openai_protocol: Protocol,
     max_tokens: Option<u32>,
     temperature: Option<f32>,
     top_p: Option<f32>,
@@ -625,8 +631,8 @@ async fn normalize_markdown_to_english(
     );
     run_markdown_transform(
         client, provider, model_name, api_key, english_normalization_system_prompt(), &user_prompt,
-        "English normalization pass", ollama_endpoint, custom_openai_endpoint, max_tokens,
-        temperature, top_p, cancellation_token,
+        "English normalization pass", ollama_endpoint, custom_openai_endpoint,
+        custom_openai_protocol, max_tokens, temperature, top_p, cancellation_token,
     )
     .await
 }
