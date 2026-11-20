@@ -136,6 +136,12 @@ mod tests {
             parse_date("下周三", today()),
             Some(NaiveDate::from_ymd_opt(2026, 8, 12).unwrap())
         );
+        // 有意偏离 Python：它的正则写成了字符类 [星期]，匹配不到「星期三」；
+        // Rust 用 (周|星期) 正确接受，Python 版对这类输入返回空。
+        assert_eq!(
+            parse_date("本星期三", today()),
+            Some(NaiveDate::from_ymd_opt(2026, 8, 5).unwrap())
+        );
     }
 
     #[test]
