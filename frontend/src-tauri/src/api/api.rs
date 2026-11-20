@@ -1006,6 +1006,7 @@ pub async fn api_save_custom_openai_config<R: Runtime>(
         max_tokens,
         temperature,
         top_p,
+        protocol: Default::default(),
     };
 
     let pool = state.db_manager.pool();

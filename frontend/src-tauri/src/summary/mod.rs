@@ -9,6 +9,15 @@
 
 use serde::{Deserialize, Serialize};
 
+/// 自定义服务接口协议
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Protocol {
+    #[default]
+    OpenAi,
+    Anthropic,
+}
+
 /// Custom OpenAI-compatible endpoint configuration
 /// Stored as JSON in the database and used for connecting to any OpenAI-compatible API server
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,6 +37,9 @@ pub struct CustomOpenAIConfig {
     /// Top-P sampling parameter (0.0-1.0, optional)
     #[serde(rename = "topP")]
     pub top_p: Option<f32>,
+    /// 接口协议；缺省 OpenAI（旧配置无此字段时自动回退）
+    #[serde(default)]
+    pub protocol: Protocol,
 }
 
 pub mod commands;

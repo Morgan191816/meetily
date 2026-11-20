@@ -1,3 +1,30 @@
+//! 端点归一化：用户可填 base URL、`/v1` 或完整端点，统一拼成对话/模型地址。
+
+use super::Protocol;
+
+/// 把用户输入（base URL 或完整 URL）归一化成对话端点。
+pub fn chat_url(endpoint: &str, protocol: Protocol) -> String {
+    let trimmed = endpoint.trim().trim_end_matches('/');
+    let suffix = match protocol {
+        Protocol::OpenAi => "/chat/completions",
+        Protocol::Anthropic => "/messages",
+    };
+    if trimmed.ends_with(suffix) {
+        return trimmed.to_string();
+    }
+    let base = if trimmed.ends_with("/v1") { trimmed.to_string() } else { format!("{trimmed}/v1") };
+    format!("{base}{suffix}")
+}
+
+pub fn models_url(endpoint: &str) -> String {
+    let trimmed = endpoint.trim().trim_end_matches('/');
+    if trimmed.ends_with("/models") {
+        return trimmed.to_string();
+    }
+    let base = if trimmed.ends_with("/v1") { trimmed.to_string() } else { format!("{trimmed}/v1") };
+    format!("{base}/models")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
