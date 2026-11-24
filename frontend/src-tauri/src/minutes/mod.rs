@@ -5,6 +5,7 @@ pub mod dates;
 pub mod excel;
 pub mod llm;
 pub mod names;
+pub mod quality;
 pub mod render;
 pub mod traceability;
 pub mod urgency;

@@ -64,9 +64,12 @@ pub enum ClaimKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClaimResult {
     pub claim: String,
+    pub kind: ClaimKind,
     pub verdict: Verdict,
     pub confidence: Confidence,
     pub sources: Vec<String>,
+    /// 判定理由（07 报告「无依据」表的一列），照 `traceability.py:162-222` 生成。
+    pub reason: String,
 }
 
 /// 校验单条声明能否从原文找到依据。
@@ -100,19 +103,22 @@ pub fn verify_claim(claim: &str, source: &str, kind: ClaimKind) -> ClaimResult {
     };
     let has_trigger = triggers.iter().any(|t| source.contains(t));
 
-    let (verdict, confidence) = judge(
+    let judgement = judge(
         longest_match_len,
         match_ratio,
         has_trigger,
         kind,
         !sources.is_empty(),
+        substrings.first().map_or("", |m| m.text.as_str()),
     );
 
     ClaimResult {
         claim: claim.to_string(),
-        verdict,
-        confidence,
+        kind,
+        verdict: judgement.verdict,
+        confidence: judgement.confidence,
         sources,
+        reason: judgement.reason,
     }
 }
 
@@ -132,60 +138,133 @@ fn triggers_for(kind: ClaimKind) -> &'static [&'static str] {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Judgement {
+    verdict: Verdict,
+    confidence: Confidence,
+    reason: String,
+}
+
 /// 判定表（traceability.py:162-222）。子串证据优先于关键词覆盖率。
+///
+/// Python 的 if-chain 同时给出 verdict / confidence / reason，这里一并返回。
 fn judge(
     longest_match_len: usize,
     match_ratio: f64,
     has_trigger: bool,
     kind: ClaimKind,
     has_sources: bool,
-) -> (Verdict, Confidence) {
-    if longest_match_len >= 8 {
-        (Verdict::Verified, Confidence::High)
+    matched: &str,
+) -> Judgement {
+    // Python 的 `{ratio:.0%}`
+    let percent = format!("{:.0}%", match_ratio * 100.0);
+
+    let (verdict, confidence, reason) = if longest_match_len >= 8 {
+        (
+            Verdict::Verified,
+            Confidence::High,
+            format!("原文含连续匹配子串\"{matched}\"（{longest_match_len}字）"),
+        )
     } else if longest_match_len >= 6 {
-        (Verdict::Verified, Confidence::Medium)
+        (
+            Verdict::Verified,
+            Confidence::Medium,
+            format!("原文含匹配子串\"{matched}\"（{longest_match_len}字）"),
+        )
     } else if longest_match_len >= 4 {
         if match_ratio >= 0.3 || has_trigger {
-            (Verdict::Verified, Confidence::Medium)
+            (
+                Verdict::Verified,
+                Confidence::Medium,
+                format!("原文含匹配子串\"{matched}\"（{longest_match_len}字），关键词覆盖 {percent}"),
+            )
         } else {
-            (Verdict::Inferred, Confidence::Low)
+            (
+                Verdict::Inferred,
+                Confidence::Low,
+                format!("原文含部分匹配子串\"{matched}\"（{longest_match_len}字），但整体属于推论"),
+            )
         }
     } else {
         match kind {
             ClaimKind::Decision => {
                 if match_ratio >= 0.4 && has_trigger && has_sources {
-                    (Verdict::Verified, Confidence::Medium)
+                    (
+                        Verdict::Verified,
+                        Confidence::Medium,
+                        format!("声明关键词覆盖原文 {percent}，含决策关键词"),
+                    )
                 } else if match_ratio >= 0.2 {
-                    (Verdict::Inferred, Confidence::Low)
+                    (
+                        Verdict::Inferred,
+                        Confidence::Low,
+                        format!("声明关键词少量匹配原文（覆盖率 {percent}），属于推论"),
+                    )
                 } else {
-                    (Verdict::Unsupported, Confidence::Low)
+                    (
+                        Verdict::Unsupported,
+                        Confidence::Low,
+                        "原文中未找到与声明匹配的关键词或子串，请确认是否来自本次会议".to_string(),
+                    )
                 }
             }
             ClaimKind::Task => {
                 if match_ratio >= 0.3 && has_trigger {
-                    (Verdict::Verified, Confidence::Medium)
+                    (
+                        Verdict::Verified,
+                        Confidence::Medium,
+                        format!("声明关键词覆盖原文 {percent}，含任务分配表述"),
+                    )
                 } else if match_ratio >= 0.15 {
-                    (Verdict::Inferred, Confidence::Low)
+                    (
+                        Verdict::Inferred,
+                        Confidence::Low,
+                        format!("声明关键词少量匹配原文（覆盖率 {percent}），属于推论"),
+                    )
                 } else {
-                    (Verdict::Unsupported, Confidence::Low)
+                    (
+                        Verdict::Unsupported,
+                        Confidence::Low,
+                        "原文中未找到与行动项匹配的关键词或子串，请确认".to_string(),
+                    )
                 }
             }
             ClaimKind::Risk => {
                 if match_ratio >= 0.3 {
-                    (Verdict::Verified, Confidence::Medium)
+                    (
+                        Verdict::Verified,
+                        Confidence::Medium,
+                        format!("声明关键词覆盖原文 {percent}"),
+                    )
                 } else if match_ratio >= 0.15 {
-                    (Verdict::Inferred, Confidence::Low)
+                    (
+                        Verdict::Inferred,
+                        Confidence::Low,
+                        format!("声明关键词少量匹配（覆盖率 {percent}），可能为推论"),
+                    )
                 } else {
-                    (Verdict::Unsupported, Confidence::Low)
+                    (
+                        Verdict::Unsupported,
+                        Confidence::Low,
+                        "原文中未找到匹配表述，请确认".to_string(),
+                    )
                 }
             }
         }
+    };
+
+    Judgement {
+        verdict,
+        confidence,
+        reason,
     }
 }
 
 struct SubMatch {
     start: usize,
     length: usize,
+    /// 命中的声明子串（清洗后），用于判定理由。
+    text: String,
 }
 
 /// 在原文中找声明的公共子串（traceability.py:398-446）。
@@ -204,7 +283,11 @@ fn longest_common_substrings(claim: &str, original: &str, min_len: usize) -> Vec
             for length in min_len..=remaining.min(19) {
                 let needle = &claim_chars[i..i + length];
                 if let Some(start) = find_first(&orig_chars, needle) {
-                    matches.push(SubMatch { start, length });
+                    matches.push(SubMatch {
+                        start,
+                        length,
+                        text: needle.iter().collect(),
+                    });
                     break;
                 }
             }
@@ -343,6 +426,25 @@ fn extract_keywords(text: &str) -> Vec<String> {
 mod tests {
     use super::*;
 
+    /// 阈值表测试只关心 verdict/confidence；理由文本另有测试。
+    fn vc(
+        longest_match_len: usize,
+        match_ratio: f64,
+        has_trigger: bool,
+        kind: ClaimKind,
+        has_sources: bool,
+    ) -> (Verdict, Confidence) {
+        let j = judge(
+            longest_match_len,
+            match_ratio,
+            has_trigger,
+            kind,
+            has_sources,
+            "",
+        );
+        (j.verdict, j.confidence)
+    }
+
     const SRC: &str = "会上确认华硕不落总灯已经结案了。冯亚的进度，龙哥这边帮忙跟进一下。预算还没批，可能来不及。";
 
     // ── brief 的 4 条行为测试 ──
@@ -382,11 +484,11 @@ mod tests {
     #[test]
     fn substring_8_plus_is_high() {
         assert_eq!(
-            judge(8, 0.0, false, ClaimKind::Decision, false),
+            vc(8, 0.0, false, ClaimKind::Decision, false),
             (Verdict::Verified, Confidence::High)
         );
         assert_eq!(
-            judge(19, 0.0, false, ClaimKind::Task, false),
+            vc(19, 0.0, false, ClaimKind::Task, false),
             (Verdict::Verified, Confidence::High)
         );
     }
@@ -394,11 +496,11 @@ mod tests {
     #[test]
     fn substring_6_to_7_is_medium() {
         assert_eq!(
-            judge(6, 0.0, false, ClaimKind::Risk, false),
+            vc(6, 0.0, false, ClaimKind::Risk, false),
             (Verdict::Verified, Confidence::Medium)
         );
         assert_eq!(
-            judge(7, 0.0, false, ClaimKind::Risk, false),
+            vc(7, 0.0, false, ClaimKind::Risk, false),
             (Verdict::Verified, Confidence::Medium)
         );
     }
@@ -406,7 +508,7 @@ mod tests {
     #[test]
     fn substring_4_with_ratio_is_medium() {
         assert_eq!(
-            judge(4, 0.3, false, ClaimKind::Decision, false),
+            vc(4, 0.3, false, ClaimKind::Decision, false),
             (Verdict::Verified, Confidence::Medium)
         );
     }
@@ -414,7 +516,7 @@ mod tests {
     #[test]
     fn substring_4_with_trigger_is_medium() {
         assert_eq!(
-            judge(4, 0.0, true, ClaimKind::Decision, false),
+            vc(4, 0.0, true, ClaimKind::Decision, false),
             (Verdict::Verified, Confidence::Medium)
         );
     }
@@ -422,7 +524,7 @@ mod tests {
     #[test]
     fn substring_4_without_ratio_or_trigger_is_inferred() {
         assert_eq!(
-            judge(4, 0.29, false, ClaimKind::Decision, false),
+            vc(4, 0.29, false, ClaimKind::Decision, false),
             (Verdict::Inferred, Confidence::Low)
         );
     }
@@ -431,7 +533,7 @@ mod tests {
     fn decision_without_substring_verified() {
         // Python 该档还要求 sources 非空，但无子串时 sources 必空 —— 死分支按规格保留。
         assert_eq!(
-            judge(0, 0.4, true, ClaimKind::Decision, true),
+            vc(0, 0.4, true, ClaimKind::Decision, true),
             (Verdict::Verified, Confidence::Medium)
         );
     }
@@ -439,11 +541,11 @@ mod tests {
     #[test]
     fn decision_without_substring_inferred() {
         assert_eq!(
-            judge(0, 0.4, true, ClaimKind::Decision, false),
+            vc(0, 0.4, true, ClaimKind::Decision, false),
             (Verdict::Inferred, Confidence::Low)
         );
         assert_eq!(
-            judge(0, 0.2, false, ClaimKind::Decision, false),
+            vc(0, 0.2, false, ClaimKind::Decision, false),
             (Verdict::Inferred, Confidence::Low)
         );
     }
@@ -451,7 +553,7 @@ mod tests {
     #[test]
     fn decision_without_substring_unsupported() {
         assert_eq!(
-            judge(0, 0.19, false, ClaimKind::Decision, false),
+            vc(0, 0.19, false, ClaimKind::Decision, false),
             (Verdict::Unsupported, Confidence::Low)
         );
     }
@@ -459,7 +561,7 @@ mod tests {
     #[test]
     fn task_without_substring_verified() {
         assert_eq!(
-            judge(0, 0.3, true, ClaimKind::Task, false),
+            vc(0, 0.3, true, ClaimKind::Task, false),
             (Verdict::Verified, Confidence::Medium)
         );
     }
@@ -467,11 +569,11 @@ mod tests {
     #[test]
     fn task_without_substring_inferred() {
         assert_eq!(
-            judge(0, 0.3, false, ClaimKind::Task, false),
+            vc(0, 0.3, false, ClaimKind::Task, false),
             (Verdict::Inferred, Confidence::Low)
         );
         assert_eq!(
-            judge(0, 0.15, true, ClaimKind::Task, false),
+            vc(0, 0.15, true, ClaimKind::Task, false),
             (Verdict::Inferred, Confidence::Low)
         );
     }
@@ -479,7 +581,7 @@ mod tests {
     #[test]
     fn task_without_substring_unsupported() {
         assert_eq!(
-            judge(0, 0.14, true, ClaimKind::Task, false),
+            vc(0, 0.14, true, ClaimKind::Task, false),
             (Verdict::Unsupported, Confidence::Low)
         );
     }
@@ -487,7 +589,7 @@ mod tests {
     #[test]
     fn risk_without_substring_verified() {
         assert_eq!(
-            judge(0, 0.3, false, ClaimKind::Risk, false),
+            vc(0, 0.3, false, ClaimKind::Risk, false),
             (Verdict::Verified, Confidence::Medium)
         );
     }
@@ -495,7 +597,7 @@ mod tests {
     #[test]
     fn risk_without_substring_inferred() {
         assert_eq!(
-            judge(0, 0.15, false, ClaimKind::Risk, false),
+            vc(0, 0.15, false, ClaimKind::Risk, false),
             (Verdict::Inferred, Confidence::Low)
         );
     }
@@ -503,7 +605,7 @@ mod tests {
     #[test]
     fn risk_without_substring_unsupported() {
         assert_eq!(
-            judge(0, 0.14, true, ClaimKind::Risk, false),
+            vc(0, 0.14, true, ClaimKind::Risk, false),
             (Verdict::Unsupported, Confidence::Low)
         );
     }
@@ -518,5 +620,22 @@ mod tests {
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].verdict, Verdict::Verified);
         assert_eq!(results[1].verdict, Verdict::Unsupported);
+    }
+
+    #[test]
+    fn kind_and_reason_are_recorded() {
+        let r = verify_claim("华硕不落总灯已经结案", SRC, ClaimKind::Decision);
+        assert_eq!(r.kind, ClaimKind::Decision);
+        assert!(
+            r.reason.starts_with("原文含匹配子串\"华硕不落\"（4字），关键词覆盖 "),
+            "reason = {}",
+            r.reason
+        );
+
+        let r = verify_claim("采购部同意追加三百万元预算", SRC, ClaimKind::Decision);
+        assert_eq!(
+            r.reason,
+            "原文中未找到与声明匹配的关键词或子串，请确认是否来自本次会议"
+        );
     }
 }

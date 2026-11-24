@@ -375,7 +375,7 @@ fn normalize_meeting_date(text: &str, today: NaiveDate) -> String {
 mod tests {
     use super::*;
     use crate::minutes::llm::{Decision, NextMeeting, Risk, TaskItem, Topic};
-    use crate::minutes::traceability::ClaimResult;
+    use crate::minutes::traceability::{ClaimKind, ClaimResult};
     use crate::minutes::validate::FixLog;
 
     fn today() -> NaiveDate {
@@ -385,9 +385,11 @@ mod tests {
     fn claim(text: &str, verdict: Verdict) -> ClaimResult {
         ClaimResult {
             claim: text.to_string(),
+            kind: ClaimKind::Decision,
             verdict,
             confidence: Confidence::High,
             sources: vec!["会上确认华硕不落总灯已经结案了".to_string()],
+            reason: String::new(),
         }
     }
 
