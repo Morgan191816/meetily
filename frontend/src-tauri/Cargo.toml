@@ -80,6 +80,9 @@ clap = { version = "4.3", features = ["derive"] }
 # Dates
 chrono = { version = "0.4.31", features = ["serde"] }
 
+# 06 任务导入 Excel
+rust_xlsxwriter = "0.104"
+
 # Log
 log = "0.4"
 tauri-plugin-log = { version = "2.6.0", features = ["colored"] }
@@ -213,6 +216,7 @@ criterion = { version = "0.5.1", features = ["async_tokio"] }
 memory-stats = "1.0"
 strsim = "0.10.0"
 futures = "0.3.31"
+calamine = "0.38"  # 测试读回 Excel
 
 [patch.crates-io]
 cpal = { git = "https://github.com/RustAudio/cpal", rev = "51c3b43" }

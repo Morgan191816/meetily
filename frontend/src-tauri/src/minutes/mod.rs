@@ -2,6 +2,7 @@
 
 pub mod conflict;
 pub mod dates;
+pub mod excel;
 pub mod llm;
 pub mod names;
 pub mod render;
