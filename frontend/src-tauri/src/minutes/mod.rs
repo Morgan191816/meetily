@@ -4,6 +4,7 @@ pub mod conflict;
 pub mod dates;
 pub mod llm;
 pub mod names;
+pub mod render;
 pub mod traceability;
 pub mod urgency;
 pub mod validate;
