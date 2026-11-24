@@ -836,6 +836,11 @@ pub fn run() {
             summary::commands::api_save_meeting_detected_summary_language,
             summary::commands::api_detect_transcript_summary_language,
             summary::commands::api_cancel_summary,
+            // Minutes commands
+            minutes::commands::api_generate_minutes,
+            minutes::commands::api_get_minutes,
+            minutes::commands::api_cancel_minutes,
+            minutes::commands::api_export_minutes_excel,
             // Template commands
             summary::template_commands::api_list_templates,
             summary::template_commands::api_get_template_details,
