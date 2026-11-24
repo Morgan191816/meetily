@@ -38,6 +38,9 @@ pub fn build_workbook_bytes(tasks: &[TaskItem], today: NaiveDate) -> Result<Vec<
 
     let bold = Format::new().set_bold();
     let date = Format::new().set_num_format("YYYY-MM-DD");
+    // 空值必须留一个 <c> 元素，否则按单元格顺序导入会左移；而 write_blank 只在
+    // 格式非默认（xf_index > 0）时才输出，所以这里必须挂一个无害的非默认格式。
+    let plain = Format::new().set_num_format("General");
 
     for (col, header) in HEADERS.iter().enumerate() {
         let col = col as u16;
@@ -52,16 +55,15 @@ pub fn build_workbook_bytes(tasks: &[TaskItem], today: NaiveDate) -> Result<Vec<
     for (row, task) in tasks.iter().enumerate() {
         let row = row as u32 + 1;
         for (col, value) in build_row(task, today).iter().enumerate() {
-            // 空值写空串（xlsxwriter 省略该单元格），日期列空值与 Python 一样不套格式。
-            if col == DATE_COL && !value.is_empty() {
-                sheet
-                    .write_string_with_format(row, DATE_COL as u16, value, &date)
-                    .map_err(|e| e.to_string())?;
+            // 空值写空白格；日期列空值与 Python 一样不套日期格式。
+            let result = if value.is_empty() {
+                sheet.write_blank(row, col as u16, &plain)
+            } else if col == DATE_COL {
+                sheet.write_string_with_format(row, col as u16, value, &date)
             } else {
-                sheet
-                    .write_string(row, col as u16, value)
-                    .map_err(|e| e.to_string())?;
-            }
+                sheet.write_string(row, col as u16, value)
+            };
+            result.map_err(|e| e.to_string())?;
         }
     }
 
@@ -103,13 +105,13 @@ fn cell(raw: &str) -> String {
 mod tests {
     use super::*;
     use calamine::{open_workbook_auto_from_rs, DataType, Reader};
-    use std::io::Cursor;
+    use std::io::{Cursor, Read};
 
     fn today() -> NaiveDate {
         NaiveDate::from_ymd_opt(2026, 8, 4).unwrap()
     }
 
-    /// 用 calamine 读回工作表；被省略的空单元格一律得到 `""`。
+    /// 用 calamine 读回工作表；空白格读作 `""`。
     fn read_rows(bytes: &[u8]) -> Vec<Vec<String>> {
         let cursor = Cursor::new(bytes.to_vec());
         let mut workbook = open_workbook_auto_from_rs(cursor).unwrap();
@@ -184,6 +186,27 @@ mod tests {
         let rows =
             read_rows(&build_workbook_bytes(&[task_with_deadline("2026-08-05")], today()).unwrap());
         assert_eq!(rows[1][5], "紧急");
+    }
+
+    #[test]
+    fn every_data_row_has_twelve_cell_elements() {
+        // calamine 按 dimension 补齐，分不清「缺失格」与「空格」，只能解包看 XML。
+        let bytes =
+            build_workbook_bytes(&[task_fixture(), task_with_deadline("")], today()).unwrap();
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let mut xml = String::new();
+        archive
+            .by_name("xl/worksheets/sheet1.xml")
+            .unwrap()
+            .read_to_string(&mut xml)
+            .unwrap();
+
+        let rows: Vec<&str> = xml.split("<row ").skip(1).collect();
+        assert!(rows.len() >= 3, "表头 + 至少 2 行数据");
+        for row in &rows[1..] {
+            let body = row.split("</row>").next().unwrap();
+            assert_eq!(body.matches("<c ").count(), 12, "每行必须 12 个 <c>：{row}");
+        }
     }
 
     #[test]

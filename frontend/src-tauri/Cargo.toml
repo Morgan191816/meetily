@@ -217,6 +217,7 @@ memory-stats = "1.0"
 strsim = "0.10.0"
 futures = "0.3.31"
 calamine = "0.38"  # 测试读回 Excel
+zip = "2.2"        # 测试解包 xlsx 校验单元格数（与 build-dependencies 同版本）
 
 [patch.crates-io]
 cpal = { git = "https://github.com/RustAudio/cpal", rev = "51c3b43" }
