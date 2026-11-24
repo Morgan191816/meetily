@@ -110,11 +110,15 @@ pub async fn api_generate_minutes<R: Runtime>(
         config,
     };
     let token = CancellationToken::new();
-    register_cancellation(&meeting_id, token.clone());
+    // 检查与写入同一把锁内完成：并发生成时后者直接失败，避免互相顶掉取消令牌
+    if !register_cancellation(&meeting_id, token.clone()) {
+        return Err("该会议正在生成纪要，请稍候".to_string());
+    }
 
     let result = run_minutes_with(
         MinutesInput {
             text: &transcript,
+            // 无成员名单来源（无 diarization，`speaker` 列无写入方）：参会人恒为空
             members: &[],
             today: Utc::now().date_naive(),
             title_hint: Some(meeting.title.as_str()),
@@ -259,21 +263,30 @@ pub async fn api_export_minutes_excel<R: Runtime>(
 }
 
 /// 导出文件名只允许安全字符，防止路径穿越。
+///
+/// `Path::file_name` 要求 id 本身就是单个文件名：拦掉 `a/b`、`..`、`.`，
+/// 以及 Windows 盘符相对路径 `C:evil.xlsx`（`file_name` 只返回 `evil.xlsx`）。
+/// 额外显式拒绝 `\` 与 `:`：Unix 上反斜杠不是分隔符，盘符前缀在 Windows 上最危险。
 fn validate_export_id(meeting_id: &str) -> Result<(), String> {
+    let is_plain_file_name =
+        Path::new(meeting_id).file_name().and_then(|name| name.to_str()) == Some(meeting_id);
     if meeting_id.trim().is_empty()
-        || meeting_id.contains('/')
+        || meeting_id.contains(':')
         || meeting_id.contains('\\')
-        || meeting_id.contains("..")
+        || !is_plain_file_name
     {
         return Err("会议 ID 无效，无法导出".to_string());
     }
     Ok(())
 }
 
-/// 逐字稿按录音顺序拼接；空则视为不可生成。
+/// 逐字稿按录音顺序拼接为 `[MM:SS] {text}`；空则视为不可生成。
+///
+/// 格式对齐摘要路径（`useSummaryGeneration.ts` 的 `buildSummaryTranscriptPayload`）：
+/// 秒数取 `audio_start_time` 向下取整，缺失时退回 `timestamp` 列。
 async fn load_transcript_text(pool: &SqlitePool, meeting_id: &str) -> Result<String, String> {
-    let segments: Vec<String> = sqlx::query_scalar(
-        "SELECT transcript FROM transcripts WHERE meeting_id = ?
+    let segments = sqlx::query_as::<_, (String, Option<f64>, String)>(
+        "SELECT transcript, audio_start_time, timestamp FROM transcripts WHERE meeting_id = ?
          ORDER BY COALESCE(audio_start_time, 0) ASC, rowid ASC",
     )
     .bind(meeting_id)
@@ -283,8 +296,20 @@ async fn load_transcript_text(pool: &SqlitePool, meeting_id: &str) -> Result<Str
 
     let text = segments
         .into_iter()
-        .map(|segment| segment.trim().to_string())
-        .filter(|segment| !segment.is_empty())
+        .filter_map(|(segment, start, timestamp)| {
+            let segment = segment.trim();
+            if segment.is_empty() {
+                return None;
+            }
+            let stamp = match start {
+                Some(seconds) => {
+                    let total = seconds.max(0.0).floor() as u64;
+                    format!("[{:02}:{:02}]", total / 60, total % 60)
+                }
+                None => timestamp,
+            };
+            Some(format!("{stamp} {segment}"))
+        })
         .collect::<Vec<_>>()
         .join("\n");
     if text.is_empty() {
@@ -321,11 +346,16 @@ fn read_meeting_metadata(folder: &Path) -> MeetingMetadata {
     }
 }
 
-fn register_cancellation(meeting_id: &str, token: CancellationToken) {
-    MINUTES_CANCELLATIONS
+/// 注册取消令牌；该会议已有在途任务时返回 false（不覆盖已有令牌）。
+fn register_cancellation(meeting_id: &str, token: CancellationToken) -> bool {
+    let mut registry = MINUTES_CANCELLATIONS
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .insert(meeting_id.to_string(), token);
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if registry.contains_key(meeting_id) {
+        return false;
+    }
+    registry.insert(meeting_id.to_string(), token);
+    true
 }
 
 fn clear_cancellation(meeting_id: &str) {
@@ -341,16 +371,32 @@ mod tests {
 
     #[test]
     fn rejects_unsafe_export_ids() {
-        for id in ["", "..", "../x", "a/b", "a\\b"] {
+        for id in [
+            "",
+            " ",
+            ".",
+            "..",
+            "../x",
+            "a/b",
+            "a\\b",
+            "C:evil.xlsx",
+            "C:\\evil.xlsx",
+            ":evil",
+        ] {
             assert!(validate_export_id(id).is_err(), "应拒绝 {id}");
         }
         assert!(validate_export_id("meeting-abc").is_ok());
+        assert!(validate_export_id("0f8c-2b1e_4a7d").is_ok());
     }
 
     #[test]
     fn cancellation_registry_round_trips() {
         let token = CancellationToken::new();
-        register_cancellation("meeting-test", token.clone());
+        assert!(register_cancellation("meeting-test", token.clone()));
+        // 同一会议第二次注册必须失败且不覆盖原令牌
+        let second = CancellationToken::new();
+        assert!(!register_cancellation("meeting-test", second.clone()));
+        assert!(!second.is_cancelled());
         assert!(!token.is_cancelled());
         let found = MINUTES_CANCELLATIONS
             .lock()

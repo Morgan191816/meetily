@@ -101,7 +101,9 @@ pub async fn run_minutes_with(
     // 4. 冲突检测（对原始任务，与 Python `_step35` 一致）
     let conflicts = detect_conflicts(&tasks);
 
-    // 5. 参会人：先看「参会人员：」行，无则回退到说话人标签
+    // 5. 参会人：先看「参会人员：」行，无则回退到说话人标签。
+    // 当前命令层喂的是 `[MM:SS] text`（无 `### 姓名` 头，应用无 diarization、`speaker`
+    // 列无写入方），所以说话人回退在应用路径上不可达，仅保留 Python 桥接的库级兼容。
     let (mut attendees, mut unmatched_attendees) = extract_attendees(&corrected, input.members);
     if attendees.is_empty() {
         let labels = speaker_labels(&corrected);
@@ -171,6 +173,9 @@ pub async fn run_minutes_with(
 }
 
 /// S1：决策内容 → 风险描述 → 任务名，各自单 kind 校验后按顺序合并。
+///
+/// 合并后再按 verdict 稳定分组（verified → inferred → unsupported，组内保持原序）：
+/// Python `_build_claim_map` 先拼三组再逐条赋 map，同文本跨类时后写覆盖。
 fn build_claims(draft: &MinutesDraft, tasks: &[TaskItem], source: &str) -> Vec<ClaimResult> {
     let decisions: Vec<String> = draft
         .decisions
@@ -182,15 +187,21 @@ fn build_claims(draft: &MinutesDraft, tasks: &[TaskItem], source: &str) -> Vec<C
         .iter()
         .map(|risk| risk.description.clone())
         .collect();
+    // 不 trim：渲染侧用未 trim 的任务名查 map，trim 会导致带首尾空格的声明丢标记
     let task_names: Vec<String> = tasks
         .iter()
-        .map(|task| task.task_name.trim().to_string())
+        .map(|task| task.task_name.clone())
         .filter(|name| !name.is_empty())
         .collect();
 
     let mut claims = verify_claims(&decisions, source, ClaimKind::Decision);
     claims.extend(verify_claims(&risks, source, ClaimKind::Risk));
     claims.extend(verify_claims(&task_names, source, ClaimKind::Task));
+    claims.sort_by_key(|claim| match claim.verdict {
+        Verdict::Verified => 0,
+        Verdict::Inferred => 1,
+        Verdict::Unsupported => 2,
+    });
     claims
 }
 
@@ -246,7 +257,7 @@ fn ensure_not_cancelled(cancel: Option<&CancellationToken>) -> Result<(), String
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::minutes::llm::Decision;
+    use crate::minutes::llm::{Decision, Risk};
 
     fn today() -> NaiveDate {
         NaiveDate::from_ymd_opt(2026, 8, 4).unwrap()
@@ -365,6 +376,57 @@ mod tests {
             vec![ClaimKind::Decision, ClaimKind::Risk, ClaimKind::Task]
         );
         assert!(!claims.iter().any(|claim| claim.claim.contains("议题标题")));
+    }
+
+    /// 同文本跨类、verdict 不同：Python 先写 verified 组再写 inferred 组，
+    /// 同文本后者覆盖，最终标记必须与 Python 一致（推论），不能被任务/风险类别反超。
+    #[test]
+    fn duplicate_claim_text_across_kinds_uses_verdict_group_order() {
+        let source = "预算还在审批，采购部说要再等等，具体时间没定。";
+        let draft = MinutesDraft {
+            decisions: vec![Decision {
+                content: "预算审批".to_string(),
+                ..Default::default()
+            }],
+            risks: vec![Risk {
+                description: "预算审批".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let claims = build_claims(&draft, &[], source);
+        let duplicates: Vec<&ClaimResult> = claims
+            .iter()
+            .filter(|claim| claim.claim == "预算审批")
+            .collect();
+        assert_eq!(duplicates.len(), 2, "决策与风险各产生一条同文本声明");
+        assert_eq!(duplicates[0].kind, ClaimKind::Risk);
+        assert_eq!(duplicates[0].verdict, Verdict::Verified);
+        assert_eq!(duplicates[1].kind, ClaimKind::Decision);
+        assert_eq!(duplicates[1].verdict, Verdict::Inferred);
+
+        // 最终标记：map 后写覆盖 → 两处都是〔推论〕
+        let validation = crate::minutes::validate::ValidationOutcome::default();
+        let minutes = render_minutes(&MinutesRenderInput {
+            title: "标题".to_string(),
+            meeting_date: "2026-08-04".to_string(),
+            project: "会议".to_string(),
+            source: "逐字稿".to_string(),
+            today: today(),
+            attendees: Vec::new(),
+            unmatched_attendees: Vec::new(),
+            draft: &draft,
+            validation: &validation,
+            claims: &claims,
+            traceability_pass: true,
+        });
+        assert!(
+            minutes.markdown.contains("- 决策-01：预算审批〔推论〕"),
+            "决策行标记应为〔推论〕\n{}",
+            minutes.markdown
+        );
+        assert!(minutes.markdown.contains("- 预算审批〔推论〕"));
     }
 
     #[test]
