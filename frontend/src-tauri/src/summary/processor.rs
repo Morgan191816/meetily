@@ -107,6 +107,9 @@ pub(crate) fn language_name_from_code(code: &str) -> Option<&'static str> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
 
     #[test]
     fn cleaner_removes_closed_reasoning_envelopes_everywhere() {
