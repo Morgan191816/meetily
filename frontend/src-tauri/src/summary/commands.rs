@@ -1,6 +1,6 @@
 use crate::database::repositories::{
     meeting::MeetingsRepository,
-    summary::SummaryProcessesRepository, transcript_chunk::TranscriptChunksRepository,
+    summary::SummaryProcessesRepository,
 };
 use crate::state::AppState;
 use crate::summary::metadata::{
@@ -11,30 +11,12 @@ use crate::summary::language_detection::{
     detect_summary_language, SummaryLanguageDetection,
 };
 use crate::summary::processor::{clean_llm_markdown_detailed, contains_reasoning_marker};
-use crate::summary::service::SummaryService;
 use log::{error as log_error, info as log_info, warn as log_warn};
-use chrono::{DateTime, Duration, SecondsFormat, Utc};
+use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::{LazyLock, Mutex};
 use tauri::{AppHandle, Runtime};
 
-
-static SUMMARY_START_LOCK: LazyLock<tokio::sync::Mutex<()>> =
-    LazyLock::new(|| tokio::sync::Mutex::new(()));
-static LAST_SUMMARY_START: LazyLock<Mutex<Option<DateTime<Utc>>>> =
-    LazyLock::new(|| Mutex::new(None));
-fn next_summary_start(now: DateTime<Utc>) -> DateTime<Utc> {
-    let mut last = LAST_SUMMARY_START
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let next = match *last {
-        Some(previous) if now <= previous => previous + Duration::nanoseconds(1),
-        _ => now,
-    };
-    *last = Some(next);
-    next
-}
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SummaryResponse {
     pub status: String,
@@ -45,12 +27,6 @@ pub struct SummaryResponse {
     pub end: Option<String>,
     pub data: Option<serde_json::Value>,
     pub error: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ProcessTranscriptResponse {
-    pub message: String,
-    pub process_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -455,152 +431,6 @@ pub async fn api_get_summary<R: Runtime>(
     }
 }
 
-/// Processes transcript and generates summary (Native SQLx implementation)
-///
-/// Spawns a background task and returns immediately with process_id
-#[tauri::command]
-pub async fn api_process_transcript<R: Runtime>(
-    _app: AppHandle<R>,
-    state: tauri::State<'_, AppState>,
-    text: String,
-    model: String,
-    model_name: String,
-    meeting_id: Option<String>,
-    _chunk_size: Option<i32>,
-    _overlap: Option<i32>,
-    custom_prompt: Option<String>,
-    template_id: Option<String>,
-    summary_language: Option<String>,
-    _auth_token: Option<String>,
-) -> Result<ProcessTranscriptResponse, String> {
-    use uuid::Uuid;
-
-    let m_id = meeting_id.unwrap_or_else(|| format!("meeting-{}", Uuid::new_v4()));
-    log_info!(
-        "api_process_transcript (native) called for meeting_id: {}, model: {}",
-        &m_id,
-        &model
-    );
-
-    let pool = state.db_manager.pool().clone();
-    let final_prompt = custom_prompt.unwrap_or_else(|| "".to_string());
-    let final_template_id = template_id.unwrap_or_else(|| "daily_standup".to_string());
-
-    // Normalise empty / whitespace-only to None so "" and null behave identically
-    let summary_language = summary_language.and_then(|s| {
-        let t = s.trim();
-        if t.is_empty() { None } else { Some(t.to_string()) }
-    });
-
-    // ponytail: summary starts are rare; use per-meeting locks only if start contention is measured.
-    let _start_guard = SUMMARY_START_LOCK.lock().await;
-    let started_at = next_summary_start(Utc::now());
-    SummaryProcessesRepository::create_or_reset_process(&pool, &m_id, started_at)
-        .await
-        .map_err(|e| format!("初始化纪要生成流程失败：{}", e))?;
-
-    let chunk_size = _chunk_size.unwrap_or(40000);
-    let overlap = _overlap.unwrap_or(1000);
-    if let Err(error) = TranscriptChunksRepository::save_transcript_data(
-        &pool,
-        &m_id,
-        &text,
-        &model,
-        &model_name,
-        chunk_size,
-        overlap,
-    )
-    .await
-    {
-        let message = format!("保存逐字稿数据失败：{}", error);
-        let _ = SummaryProcessesRepository::update_process_failed(
-            &pool,
-            &m_id,
-            started_at,
-            &message,
-        )
-        .await;
-        return Err(message);
-    }
-
-    let cancellation_token =
-        SummaryService::register_cancellation_token(&m_id, started_at);
-    let meeting_id_clone = m_id.clone();
-    tauri::async_runtime::spawn(async move {
-        SummaryService::process_transcript_background(
-            pool,
-            meeting_id_clone,
-            started_at,
-            cancellation_token,
-            text,
-            model,
-            model_name,
-            final_prompt,
-            final_template_id,
-            summary_language,
-        )
-        .await;
-    });
-
-    log_info!("🚀 Background task spawned for meeting_id: {}", &m_id);
-    Ok(ProcessTranscriptResponse {
-        message: "Summary generation started".to_string(),
-        process_id: started_at.to_rfc3339_opts(SecondsFormat::Nanos, true),
-    })
-}
-
-/// Cancels an ongoing summary generation process
-///
-/// This command triggers the cancellation token for the specified meeting,
-/// stopping the summary generation gracefully.
-#[tauri::command]
-pub async fn api_cancel_summary<R: Runtime>(
-    _app: AppHandle<R>,
-    state: tauri::State<'_, AppState>,
-    meeting_id: String,
-    process_id: String,
-) -> Result<serde_json::Value, String> {
-    let started_at = DateTime::parse_from_rfc3339(&process_id)
-        .map_err(|_| "纪要流程 ID 无效".to_string())?
-        .with_timezone(&Utc);
-    log_info!("api_cancel_summary called for meeting_id: {}", meeting_id);
-
-    let cancellation_requested = SummaryService::cancel_summary(&meeting_id, started_at);
-    let cancelled = if cancellation_requested {
-        let pool = state.db_manager.pool();
-        match SummaryProcessesRepository::update_process_cancelled(pool, &meeting_id, started_at)
-            .await
-        {
-            Ok(true) => {
-                log_info!("Successfully cancelled summary generation for meeting_id: {}", meeting_id);
-                true
-            }
-            Ok(false) => {
-                log_info!("Summary generation was already terminal for meeting_id: {}", meeting_id);
-                false
-            }
-            Err(error) => {
-                log_error!("Failed to update cancellation status for {}: {}", meeting_id, error);
-                return Err(format!("更新取消状态失败：{}", error));
-            }
-        }
-    } else {
-        false
-    };
-
-    Ok(serde_json::json!({
-        "cancelled": cancelled,
-        "message": if cancelled {
-            "Summary generation cancelled successfully"
-        } else if cancellation_requested {
-            "Summary generation was already terminal"
-        } else {
-            "No active summary generation to cancel"
-        },
-        "meeting_id": meeting_id,
-    }))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -620,15 +450,6 @@ mod tests {
         assert_eq!(
             redact_flagged_reasoning(json!({"reasoning": "custom", "markdown": "visible"})),
             json!({"reasoning": "custom", "markdown": "visible"})
-        );
-    }
-
-    #[test]
-    fn summary_start_tokens_are_monotonic_with_identical_clock_inputs() {
-        let first = next_summary_start(Utc::now());
-        assert_eq!(
-            next_summary_start(first),
-            first + Duration::nanoseconds(1)
         );
     }
 

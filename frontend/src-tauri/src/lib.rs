@@ -688,16 +688,6 @@ pub fn run() {
                     .ok(),
             );
 
-            // Initialize bundled templates directory for dynamic template discovery
-            log::info!("Initializing bundled templates directory...");
-            if let Ok(resource_path) = _app.handle().path().resource_dir() {
-                let templates_dir = resource_path.join("templates");
-                log::info!("Setting bundled templates directory to: {:?}", templates_dir);
-                summary::templates::set_bundled_templates_dir(templates_dir);
-            } else {
-                log::warn!("Failed to resolve resource directory for templates");
-            }
-
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -826,8 +816,7 @@ pub fn run() {
             api::api_get_custom_openai_config,
             api::api_test_custom_openai_connection,
             api::api_list_custom_models,
-            // Summary commands
-            summary::commands::api_process_transcript,
+            // Summary commands (legacy read/save + language preferences)
             summary::commands::api_get_summary,
             summary::commands::api_save_meeting_summary,
             summary::commands::api_get_meeting_summary_language,
@@ -835,16 +824,11 @@ pub fn run() {
             summary::commands::api_get_meeting_detected_summary_language,
             summary::commands::api_save_meeting_detected_summary_language,
             summary::commands::api_detect_transcript_summary_language,
-            summary::commands::api_cancel_summary,
             // Minutes commands
             minutes::commands::api_generate_minutes,
             minutes::commands::api_get_minutes,
             minutes::commands::api_cancel_minutes,
             minutes::commands::api_export_minutes_excel,
-            // Template commands
-            summary::template_commands::api_list_templates,
-            summary::template_commands::api_get_template_details,
-            summary::template_commands::api_validate_template,
             openrouter::get_openrouter_models,
             audio::recording_preferences::get_recording_preferences,
             audio::recording_preferences::set_recording_preferences,

@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import dynamic from 'next/dynamic';
 import { Summary, SummaryDataResponse, SummaryFormat, BlockNoteBlock } from '@/types';
-import { AISummary } from './index';
 import { Block } from '@blocknote/core';
 import { zh } from '@blocknote/core/locales';
 import { useCreateBlockNote } from '@blocknote/react';
@@ -220,21 +219,6 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
     },
     isDirty
   }), [handleSave, isDirty, editor, format, currentBlocks, data]);
-
-  // Render legacy format
-  if (format === 'legacy') {
-    console.log('🎨 Rendering LEGACY format');
-    return (
-      <AISummary
-        summary={summaryData as Summary}
-        status={status}
-        error={error}
-        onSummaryChange={onSummaryChange || (() => { })}
-        onRegenerateSummary={onRegenerateSummary || (() => { })}
-        meeting={meeting}
-      />
-    );
-  }
 
   // Render BlockNote format (has summary_json)
   if (format === 'blocknote') {
