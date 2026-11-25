@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { hasVisibleSummaryContent, parseSummaryContent } from '../../src/lib/summary-content';
+import { hasVisibleSummaryContent, parseSummaryContent, summaryToMarkdown } from '../../src/lib/summary-content';
 
 describe('summary content validation', () => {
   test('accepts visible markdown and rejects whitespace or reasoning markers', () => {
@@ -28,5 +28,31 @@ describe('summary content validation', () => {
   test('parses one historical double-encoded payload', () => {
     expect(parseSummaryContent('{"markdown":"Visible"}')).toEqual({ markdown: 'Visible' });
     expect(parseSummaryContent('{not json')).toBeNull();
+  });
+});
+
+describe('summaryToMarkdown', () => {
+  test('converts legacy sections to markdown bullets', () => {
+    expect(summaryToMarkdown({
+      Decisions: {
+        title: '决策事项',
+        blocks: [{ content: '确认预算' }, { content: '   ' }],
+      },
+    })).toBe('## 决策事项\n\n- 确认预算');
+  });
+
+  test('returns null when only summary_json blocks exist', () => {
+    expect(summaryToMarkdown({
+      summary_json: [{ content: [{ type: 'text', text: 'Visible' }] }],
+    })).toBeNull();
+  });
+
+  test('does not output MeetingName metadata', () => {
+    const markdown = summaryToMarkdown({
+      MeetingName: 'InternalName',
+      Decisions: { title: '决策事项', blocks: [{ content: '确认预算' }] },
+    });
+    expect(markdown).toContain('决策事项');
+    expect(markdown).not.toContain('InternalName');
   });
 });

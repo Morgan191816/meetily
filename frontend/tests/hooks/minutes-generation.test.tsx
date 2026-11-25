@@ -45,7 +45,7 @@ const record = (overrides: Record<string, unknown> = {}) => ({
 let state: ReturnType<typeof useMinutesGeneration>;
 function View({ meetingId }: { meetingId: string }) {
   state = useMinutesGeneration(meetingId);
-  return <output>{JSON.stringify({ status: state.status, progress: state.progress, minutes: state.minutes, quality: state.quality, error: state.error })}</output>;
+  return <output>{JSON.stringify({ status: state.status, progress: state.progress, minutes: state.minutes, quality: state.quality, error: state.error, loaded: state.loaded })}</output>;
 }
 
 let renderer: ReactTestRenderer | null = null;
@@ -85,6 +85,59 @@ afterEach(async () => {
 });
 
 describe('useMinutesGeneration', () => {
+  test('首次加载完成前 loaded 为 false，完成后为 true', async () => {
+    let resolveGet!: (value: unknown) => void;
+    getMinutes = () => new Promise((resolve) => {
+      resolveGet = resolve;
+    });
+
+    await show();
+    expect(state.loaded).toBe(false);
+
+    await act(async () => {
+      resolveGet(null);
+    });
+    expect(state.loaded).toBe(true);
+  });
+
+  test('首次加载失败时 loaded 仍为 true', async () => {
+    getMinutes = async () => {
+      throw new Error('数据库不可用');
+    };
+
+    await show();
+    expect(state.loaded).toBe(true);
+  });
+
+  test('取消未命中且生成随后失败时状态为 error', async () => {
+    let rejectGenerate!: (error: Error) => void;
+    generateMinutes = () => new Promise((_resolve, reject) => {
+      rejectGenerate = reject;
+    });
+    cancelMinutes = async () => false;
+    await show();
+
+    let generation!: Promise<void>;
+    await act(async () => {
+      generation = state.generate();
+    });
+    expect(state.status).toBe('processing');
+
+    let cancelled!: boolean;
+    await act(async () => {
+      cancelled = await state.cancel();
+    });
+    expect(cancelled).toBe(false);
+    expect(state.status).toBe('processing');
+
+    await act(async () => {
+      rejectGenerate(new Error('模型不可用'));
+      await generation;
+    });
+    expect(state.status).toBe('error');
+    expect(state.error).toBe('模型不可用');
+  });
+
   test('进度事件驱动状态迁移', async () => {
     let resolveGenerate!: (value: unknown) => void;
     generateMinutes = () => new Promise((resolve) => {

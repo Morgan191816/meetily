@@ -53,17 +53,26 @@ export function useMinutesGeneration(meetingId: string) {
   const [minutes, setMinutes] = useState<string | null>(null);
   const [quality, setQuality] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // 取消后 generate 的 Promise 仍会以「已取消」拒绝，用它区分取消与真实失败
+  // 首次 DB 读取完成（失败也算），供自动生成判定「可以开始」
+  const [loaded, setLoaded] = useState(false);
+  // 取消后 generate 的 Promise 仍会以「已取消」拒绝，用它过滤迟到的事件
   const cancelledRef = useRef(false);
+  // 每次 generate 递增；Promise 收尾时序号不匹配说明是旧运行
+  const runIdRef = useRef(0);
 
   const load = useCallback(async () => {
-    const record = await invoke<MinutesRecord | null>('api_get_minutes', { meetingId });
-    setMinutes(record?.markdown ?? null);
-    setQuality(record?.qualityMarkdown ?? null);
+    try {
+      const record = await invoke<MinutesRecord | null>('api_get_minutes', { meetingId });
+      setMinutes(record?.markdown ?? null);
+      setQuality(record?.qualityMarkdown ?? null);
+    } finally {
+      setLoaded(true);
+    }
   }, [meetingId]);
 
   // 打开会议时先展示已生成的纪要
   useEffect(() => {
+    setLoaded(false);
     load().catch((cause) => console.error('加载会议纪要失败:', cause));
   }, [load]);
 
@@ -113,42 +122,45 @@ export function useMinutesGeneration(meetingId: string) {
   }, [meetingId, load]);
 
   const generate = useCallback(async () => {
+    const runId = ++runIdRef.current;
     cancelledRef.current = false;
     setStatus('processing');
     setError(null);
     setProgress(IDLE_PROGRESS);
     try {
       const record = await invoke<MinutesRecord>('api_generate_minutes', { meetingId });
-      if (cancelledRef.current) return;
+      if (runId !== runIdRef.current) return;
       setMinutes(record.markdown);
       setQuality(record.qualityMarkdown);
       setStatus('completed');
       setProgress({ stage: 'done', percent: 100 });
     } catch (cause) {
-      if (cancelledRef.current) return;
+      if (runId !== runIdRef.current) return;
       setStatus('error');
       setError(cause instanceof Error ? cause.message : String(cause));
     }
   }, [meetingId]);
 
   const cancel = useCallback(async () => {
+    const runId = runIdRef.current;
     cancelledRef.current = true;
     try {
       const cancelled = await invoke<boolean>('api_cancel_minutes', { meetingId });
       if (!cancelled) {
-        // 后端没有在途任务：让 generate 的 Promise 自己收尾
-        cancelledRef.current = false;
+        // 后端没有在途任务：不复位 cancelledRef，让在途 Promise 按真实结果收尾
         return false;
       }
     } catch (cause) {
       cancelledRef.current = false;
       throw cause;
     }
+    // 使在途 Promise 的收尾失效，避免它覆盖取消后的 idle
+    runIdRef.current = runId + 1;
     setStatus('idle');
     setProgress(IDLE_PROGRESS);
     setError(null);
     return true;
   }, [meetingId]);
 
-  return { status, progress, generate, cancel, minutes, quality, error };
+  return { status, progress, generate, cancel, minutes, quality, error, loaded };
 }

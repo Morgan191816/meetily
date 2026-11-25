@@ -24,6 +24,7 @@ interface MinutesToolbarProps {
   progress: MinutesProgress;
   error: string | null;
   hasMinutes: boolean;
+  canGenerate: boolean;
   onGenerate: () => void | Promise<void>;
   onCancel: () => void;
 }
@@ -34,6 +35,7 @@ export function MinutesToolbar({
   progress,
   error,
   hasMinutes,
+  canGenerate,
   onGenerate,
   onCancel,
 }: MinutesToolbarProps) {
@@ -47,9 +49,9 @@ export function MinutesToolbar({
       toast.success('Excel 已导出', {
         description: path,
         action: {
-          label: '打开文件夹',
+          label: '打开数据目录',
           onClick: () => {
-            invoke('open_database_folder').catch(() => toast.error('打开文件夹失败'));
+            invoke('open_database_folder').catch(() => toast.error('打开数据目录失败'));
           },
         },
       });
@@ -68,7 +70,7 @@ export function MinutesToolbar({
             <Square size={16} />
             停止
           </Button>
-        ) : hasMinutes ? (
+        ) : canGenerate ? (
           <Button variant="blue" size="sm" onClick={() => void onGenerate()}>
             <Play size={16} />
             生成纪要
@@ -88,8 +90,8 @@ export function MinutesToolbar({
       {processing && (
         <div className="mt-3 space-y-1">
           <Progress value={progress.percent} />
-          <p className="text-center text-xs text-gray-500">
-            {progress.stage ? `${STAGE_LABELS[progress.stage]} ${progress.percent}%` : '准备中…'}
+          <p aria-live="polite" className="text-center text-xs text-gray-500">
+            {progress.stage ? `${STAGE_LABELS[progress.stage] ?? progress.stage} ${progress.percent}%` : '准备中…'}
           </p>
         </div>
       )}

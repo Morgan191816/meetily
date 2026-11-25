@@ -112,6 +112,41 @@ describe('MinutesPanel', () => {
     expect(renderer!.root.findByType('pre').props['data-editable']).toBe('false');
   });
 
+  test('旧纪要会议可以重新生成，导出仍禁用', async () => {
+    const onGenerate = mock(() => {});
+    await act(async () => {
+      renderer = create(minutesPanel({
+        legacySummary: {
+          Decisions: { title: '决策事项', blocks: [{ id: 'b1', type: 'text', content: '确认预算', color: '' }] },
+        },
+        onGenerate,
+      }));
+    });
+
+    const generateButtons = buttons(renderer!).filter((button) => textOf(button.children).includes('生成纪要'));
+    expect(generateButtons).toHaveLength(1);
+    expect(buttonByText(renderer!, '导出 Excel').props.disabled).toBe(true);
+
+    await act(async () => {
+      generateButtons[0].props.onClick();
+    });
+    expect(onGenerate).toHaveBeenCalledTimes(1);
+  });
+
+  test('旧版 summary_json 纪要只读渲染并提示', async () => {
+    await act(async () => {
+      renderer = create(minutesPanel({
+        legacySummary: {
+          summary_json: [{ id: 'b1', type: 'paragraph', content: [{ type: 'text', text: '旧纪要内容' }] }],
+        },
+      }));
+    });
+
+    const text = textOf(renderer!.toJSON());
+    expect(text).toContain('此纪要由旧版生成，重新生成将使用新版纪要');
+    expect(renderer!.root.findByType('pre').props['data-editable']).toBe('false');
+  });
+
   test('纪要面板以只读模式渲染编辑器', async () => {
     await act(async () => {
       renderer = create(minutesPanel({ minutes: '# 会议纪要' }));

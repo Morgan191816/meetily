@@ -41,6 +41,7 @@ export function MinutesPanel({
         progress={progress}
         error={error}
         hasMinutes={Boolean(minutes)}
+        canGenerate={Boolean(minutes) || Boolean(legacyData)}
         onGenerate={onGenerate}
         onCancel={onCancel}
       />
@@ -53,7 +54,7 @@ export function MinutesPanel({
         </div>
       ) : legacyData ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <p className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-800">
+          <p role="status" className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-800">
             此纪要由旧版生成，重新生成将使用新版纪要
           </p>
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto">

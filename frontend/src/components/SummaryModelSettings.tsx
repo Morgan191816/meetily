@@ -142,6 +142,12 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
           配置用于生成会议纪要的 AI 模型。
         </p>
 
+        {modelConfig.provider !== 'custom-openai' && (
+          <p className="mb-6 text-sm text-amber-700">
+            会议纪要仅使用「自定义服务（OpenAI / Anthropic 兼容）」的配置生成；当前选择的其它服务不会用于纪要。
+          </p>
+        )}
+
         <ModelSettingsModal
           modelConfig={modelConfig}
           setModelConfig={setModelConfig}
