@@ -107,14 +107,11 @@ pub(crate) fn language_name_from_code(code: &str) -> Option<&'static str> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
     #[test]
     fn cleaner_removes_closed_reasoning_envelopes_everywhere() {
         let cleaned = clean_llm_markdown_detailed(
-            "Intro\n thinkingprivate</think>\n# Meeting\nHello\n<thinking>also private</thinking>\nTail",
+            "Intro\n<think>private</think>\n# Meeting\nHello\n<thinking>also private</thinking>\nTail",
         );
         assert!(cleaned.reasoning_stripped);
         assert!(!cleaned.markdown.contains("<think"));
@@ -123,7 +120,7 @@ mod tests {
         assert!(cleaned.markdown.contains("# Meeting"));
         assert!(cleaned.markdown.contains("Tail"));
 
-        let fenced = clean_llm_markdown_detailed("```\n thinkingprivate</think>\nvisible\n```");
+        let fenced = clean_llm_markdown_detailed("```\n<think>private</think>\nvisible\n```");
         assert_eq!(fenced.markdown, "visible");
         assert!(fenced.reasoning_stripped);
 
@@ -143,7 +140,7 @@ mod tests {
     #[test]
     fn cleaner_rejects_unterminated_reasoning_markers() {
         for raw in [
-            "Visible\n thinkingprivate",
+            "Visible\n<think>private",
             "Visible\n</thinking>",
             "Visible\n<think class=\"internal\">private",
         ] {
@@ -157,7 +154,7 @@ mod tests {
 
     #[test]
     fn reasoning_only_and_empty_fences_fail_visible_content_guard() {
-        let reasoning_only = clean_llm_markdown_detailed(" thinkingprivate</think>");
+        let reasoning_only = clean_llm_markdown_detailed("<think>private</think>");
         assert_eq!(
             require_visible_markdown("最终纪要", &reasoning_only),
             Err("最终纪要在移除推理内容后不含可见纪要内容".to_string())
