@@ -58,9 +58,8 @@ export function useMinutesGeneration(meetingId: string) {
 
   const load = useCallback(async () => {
     const record = await invoke<MinutesRecord | null>('api_get_minutes', { meetingId });
-    if (!record) return;
-    setMinutes(record.markdown);
-    setQuality(record.qualityMarkdown);
+    setMinutes(record?.markdown ?? null);
+    setQuality(record?.qualityMarkdown ?? null);
   }, [meetingId]);
 
   // 打开会议时先展示已生成的纪要
@@ -75,6 +74,8 @@ export function useMinutesGeneration(meetingId: string) {
     const attach = async () => {
       const unlistenProgress = await listen<MinutesProgressEvent>('minutes-progress', (event) => {
         if (event.payload.meetingId !== meetingId) return;
+        // 取消后迟到的阶段事件不得把状态改回 processing；done 仍要收，管线可能已成功
+        if (cancelledRef.current && event.payload.stage !== 'done') return;
         setProgress({ stage: event.payload.stage, percent: event.payload.percent });
         if (event.payload.stage === 'done') {
           setStatus('completed');
@@ -91,6 +92,7 @@ export function useMinutesGeneration(meetingId: string) {
 
       const unlistenError = await listen<MinutesErrorEvent>('minutes-error', (event) => {
         if (event.payload.meetingId !== meetingId) return;
+        if (cancelledRef.current) return;
         setStatus('error');
         setError(event.payload.error);
       });

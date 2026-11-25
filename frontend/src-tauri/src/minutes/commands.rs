@@ -143,44 +143,54 @@ pub async fn api_generate_minutes<R: Runtime>(
     )
     .await;
 
-    clear_cancellation(&meeting_id);
-    if let Err(error) = &result {
-        // 用户主动取消不算失败，前端 cancel() 已把状态复位
-        if !token.is_cancelled() {
-            let _ = app.emit(
-                "minutes-error",
-                serde_json::json!({ "meetingId": meeting_id.as_str(), "error": error }),
-            );
+    let output = match result {
+        Ok(output) => output,
+        Err(error) => {
+            clear_cancellation(&meeting_id);
+            // 用户主动取消不算失败，前端 cancel() 已把状态复位
+            if !token.is_cancelled() {
+                let _ = app.emit(
+                    "minutes-error",
+                    serde_json::json!({ "meetingId": meeting_id.as_str(), "error": error }),
+                );
+            }
+            return Err(error);
         }
-    }
-    let output = result?;
+    };
 
     let now = Utc::now().to_rfc3339();
-    let tasks_json = serde_json::to_string(&output.tasks)
-        .map_err(|error| format!("序列化行动项失败：{error}"))?;
-    sqlx::query(
-        "INSERT INTO meeting_minutes
-            (meeting_id, markdown, quality_markdown, tasks_json, traceability_pass, validation_pass, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(meeting_id) DO UPDATE SET
-            markdown = excluded.markdown,
-            quality_markdown = excluded.quality_markdown,
-            tasks_json = excluded.tasks_json,
-            traceability_pass = excluded.traceability_pass,
-            validation_pass = excluded.validation_pass,
-            updated_at = excluded.updated_at",
-    )
-    .bind(&meeting_id)
-    .bind(&output.minutes_markdown)
-    .bind(&output.quality_markdown)
-    .bind(&tasks_json)
-    .bind(output.traceability_pass)
-    .bind(output.validation_pass)
-    .bind(&now)
-    .bind(&now)
-    .execute(pool)
-    .await
-    .map_err(|error| format!("保存会议纪要失败：{error}"))?;
+    let saved = async {
+        let tasks_json = serde_json::to_string(&output.tasks)
+            .map_err(|error| format!("序列化行动项失败：{error}"))?;
+        sqlx::query(
+            "INSERT INTO meeting_minutes
+                (meeting_id, markdown, quality_markdown, tasks_json, traceability_pass, validation_pass, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(meeting_id) DO UPDATE SET
+                markdown = excluded.markdown,
+                quality_markdown = excluded.quality_markdown,
+                tasks_json = excluded.tasks_json,
+                traceability_pass = excluded.traceability_pass,
+                validation_pass = excluded.validation_pass,
+                updated_at = excluded.updated_at",
+        )
+        .bind(&meeting_id)
+        .bind(&output.minutes_markdown)
+        .bind(&output.quality_markdown)
+        .bind(&tasks_json)
+        .bind(output.traceability_pass)
+        .bind(output.validation_pass)
+        .bind(&now)
+        .bind(&now)
+        .execute(pool)
+        .await
+        .map_err(|error| format!("保存会议纪要失败：{error}"))?;
+        Ok::<(), String>(())
+    }
+    .await;
+    // 落库结束才清理令牌：写库窗口内的取消仍应返回 true，而不是无声的 false
+    clear_cancellation(&meeting_id);
+    saved?;
 
     // 落库成功后才报完成：前端收到 done 会立刻回读纪要
     let _ = app.emit(

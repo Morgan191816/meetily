@@ -160,6 +160,25 @@ describe('useMinutesGeneration', () => {
     expect(state.minutes).toBe('# 旧纪要');
   });
 
+  test('取消后迟到的进度事件不把状态改回 processing', async () => {
+    generateMinutes = () => new Promise(() => {});
+    await show();
+
+    await act(async () => {
+      void state.generate();
+    });
+    expect(state.status).toBe('processing');
+
+    await act(async () => {
+      expect(await state.cancel()).toBe(true);
+    });
+    expect(state.status).toBe('idle');
+
+    await emit('minutes-progress', { meetingId: 'meeting-a', stage: 'summarizing', percent: 60 });
+    expect(state.status).toBe('idle');
+    expect(state.progress).toEqual({ stage: null, percent: 0 });
+  });
+
   test('minutes-error 置为失败并保留旧纪要', async () => {
     getMinutes = async () => record({ markdown: '# 旧纪要' });
     await show();
