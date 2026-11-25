@@ -5,9 +5,16 @@ Morgan Meet 是一款本地优先的会议助手：在本机完成麦克风与�
 ## 功能
 
 - **本地双轨采集**：同时录制麦克风与系统声音，支持设备选择、混音与回放。
-- **本地转写**：基于 Whisper（whisper.cpp / whisper-rs）在本机离线转写，无需云端 ASR。
-- **会议纪要**：通过已配置的 HTTP 摘要服务（Ollama、OpenAI 兼容接口等）生成摘要、决策、行动项、风险与待决问题，输出 Markdown 纪要。
-- **隐私优先**：音频与转写默认不离开本机；仅在显式配置云端摘要服务时才发送转写文本。
+- **本地转写**：默认 SenseVoice（sherpa-onnx）在本机离线转写中文，保留 Whisper 备选，无需云端 ASR。
+- **会议纪要**：经统一模型配置（OpenAI / Anthropic 兼容）生成 05 纪要 12 区块、06 任务导入 Excel 12 列与 07 质检报告，含溯源标注。
+- **三视图**：逐字稿、纪要、质检分栏查看；旧版纪要只读保留，可一键重新生成。
+- **隐私优先**：音频与转写默认不离开本机；仅在生成纪要时才把纠错后的逐字稿发送到你配置的模型服务。
+
+## 安装
+
+从 [Releases](https://github.com/Morgan191816/meetily/releases) 下载安装包（MSI 或 NSIS）。SenseVoice 模型体积较大，作为单独附件分发：把 `sensevoice-model.zip` 解压到 `%APPDATA%\com.morgan.meet\models\sense-voice\`（目录内应有 `model.int8.onnx` 与 `tokens.txt`），或设置环境变量 `MORGAN_MEET_MODELS_DIR` 指向模型目录。
+
+首次启动后在「设置 → 纪要模型配置」填写自定义服务地址、密钥与模型名。
 
 ## 从源码构建
 
@@ -33,7 +40,7 @@ cd frontend && bun test
 
 ## 项目结构
 
-- `frontend/`：Next.js/React 界面与 Rust/Tauri 原生核心（音频、持久化、转写、摘要编排）。
+- `frontend/`：Next.js/React 界面与 Rust/Tauri 原生核心（音频、持久化、转写、纪要编排）。
 - `frontend/src-tauri/`：Tauri 后端，Rust 命令与事件。
 - `docs/`：架构、构建与平台说明。贡献指南见 [CONTRIBUTING.md](CONTRIBUTING.md)，AI 代理约定见 [AGENTS.md](AGENTS.md)。
 
