@@ -10,14 +10,14 @@ use std::sync::{LazyLock, Mutex};
 use chrono::Utc;
 use serde::Serialize;
 use sqlx::SqlitePool;
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio_util::sync::CancellationToken;
 
 use crate::database::repositories::meeting::MeetingsRepository;
 use crate::database::repositories::setting::SettingsRepository;
 use crate::minutes::excel::build_workbook_bytes;
 use crate::minutes::llm::{MinutesDraft, TaskItem};
-use crate::minutes::orchestrator::{run_minutes_with, MinutesInput, MinutesLlm};
+use crate::minutes::orchestrator::{run_minutes_with_progress, MinutesInput, MinutesLlm};
 use crate::state::AppState;
 use crate::summary::CustomOpenAIConfig;
 
@@ -72,7 +72,7 @@ pub struct MinutesRecord {
 /// 生成会议纪要并写入 `meeting_minutes`。
 #[tauri::command]
 pub async fn api_generate_minutes<R: Runtime>(
-    _app: AppHandle<R>,
+    app: AppHandle<R>,
     state: tauri::State<'_, AppState>,
     meeting_id: String,
 ) -> Result<MinutesRecord, String> {
@@ -115,7 +115,18 @@ pub async fn api_generate_minutes<R: Runtime>(
         return Err("该会议正在生成纪要，请稍候".to_string());
     }
 
-    let result = run_minutes_with(
+    let progress = |stage: &str, percent: u32| {
+        let _ = app.emit(
+            "minutes-progress",
+            serde_json::json!({
+                "meetingId": meeting_id.as_str(),
+                "stage": stage,
+                "percent": percent,
+            }),
+        );
+    };
+
+    let result = run_minutes_with_progress(
         MinutesInput {
             text: &transcript,
             // 无成员名单来源（无 diarization，`speaker` 列无写入方）：参会人恒为空
@@ -128,10 +139,20 @@ pub async fn api_generate_minutes<R: Runtime>(
             cancel: Some(&token),
         },
         &llm,
+        &progress,
     )
     .await;
 
     clear_cancellation(&meeting_id);
+    if let Err(error) = &result {
+        // 用户主动取消不算失败，前端 cancel() 已把状态复位
+        if !token.is_cancelled() {
+            let _ = app.emit(
+                "minutes-error",
+                serde_json::json!({ "meetingId": meeting_id.as_str(), "error": error }),
+            );
+        }
+    }
     let output = result?;
 
     let now = Utc::now().to_rfc3339();
@@ -161,6 +182,11 @@ pub async fn api_generate_minutes<R: Runtime>(
     .await
     .map_err(|error| format!("保存会议纪要失败：{error}"))?;
 
+    // 落库成功后才报完成：前端收到 done 会立刻回读纪要
+    let _ = app.emit(
+        "minutes-progress",
+        serde_json::json!({ "meetingId": meeting_id.as_str(), "stage": "done", "percent": 100 }),
+    );
     log::info!("会议纪要已生成：meeting_id={meeting_id}");
 
     Ok(MinutesRecord {

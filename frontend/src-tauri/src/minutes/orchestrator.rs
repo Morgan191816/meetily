@@ -39,6 +39,9 @@ pub struct MinutesOutput {
     pub validation_pass: bool,
 }
 
+/// 阶段进度回调：`(stage, percent)`。命令层桥接成 Tauri 事件，测试传空实现。
+pub type ProgressSink<'a> = &'a (dyn Fn(&str, u32) + Sync);
+
 /// 编排输入。`title_hint` / `project` / `source` / `metadata_created_at` 由命令层提供，
 /// 测试可全部省略（brief 的 `run_minutes` 签名）。
 pub struct MinutesInput<'a> {
@@ -80,11 +83,25 @@ pub async fn run_minutes_with(
     input: MinutesInput<'_>,
     llm: &dyn MinutesLlm,
 ) -> Result<MinutesOutput, String> {
+    run_minutes_with_progress(input, llm, &|_, _| {}).await
+}
+
+/// 同 `run_minutes_with`，额外在每个阶段边界回调进度。
+///
+/// `done` 不在这里发出：命令层要等纪要落库后才能报完成，否则前端收到 `done`
+/// 立刻回读会拿到旧数据。
+pub async fn run_minutes_with_progress(
+    input: MinutesInput<'_>,
+    llm: &dyn MinutesLlm,
+    progress: ProgressSink<'_>,
+) -> Result<MinutesOutput, String> {
     // 1. 术语纠正（单趟最长匹配；未初始化时原样返回）
+    progress("correcting", 5);
     let corrected = correct_terms(input.text);
     ensure_not_cancelled(input.cancel)?;
 
     // 2. step2 总结
+    progress("summarizing", 25);
     let draft = llm
         .summarize(&corrected)
         .await
@@ -92,6 +109,7 @@ pub async fn run_minutes_with(
     ensure_not_cancelled(input.cancel)?;
 
     // 3. step3 任务拆解
+    progress("extracting", 55);
     let tasks = llm
         .extract_tasks(&corrected)
         .await
@@ -121,6 +139,7 @@ pub async fn run_minutes_with(
     }
 
     // 6. 溯源：按 kind 三次调用后合并（决策 → 风险 → 任务），不含议题标题
+    progress("tracing", 70);
     let claims = build_claims(&draft, &tasks, &corrected);
     let traceability_pass = claims
         .iter()
@@ -128,9 +147,11 @@ pub async fn run_minutes_with(
     ensure_not_cancelled(input.cancel)?;
 
     // 7. 质检（自动修复 + 校验）
+    progress("validating", 80);
     let validation = validate_tasks(&tasks, input.members, input.today);
 
     // 8. 渲染 05 / 07
+    progress("rendering", 90);
     let title = input
         .title_hint
         .map(str::trim)
@@ -350,6 +371,71 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.contains("纪要生成失败"));
+    }
+
+    #[tokio::test]
+    async fn progress_sink_reports_stage_boundaries() {
+        let stub = StubLlm::new(step2_fixture(), step3_fixture());
+        let stages = std::sync::Mutex::new(Vec::new());
+        let sink = |stage: &str, percent: u32| {
+            stages.lock().unwrap().push((stage.to_string(), percent));
+        };
+        run_minutes_with_progress(
+            MinutesInput {
+                text: "参会人员：许日政\n会上确认华硕不落总灯已经结案。跟进冯亚项目进度。",
+                members: &members(),
+                today: today(),
+                title_hint: None,
+                project: None,
+                source: None,
+                metadata_created_at: None,
+                cancel: None,
+            },
+            &stub,
+            &sink,
+        )
+        .await
+        .unwrap();
+
+        let stages = stages.lock().unwrap();
+        let names: Vec<&str> = stages.iter().map(|(stage, _)| stage.as_str()).collect();
+        assert_eq!(
+            names,
+            vec![
+                "correcting",
+                "summarizing",
+                "extracting",
+                "tracing",
+                "validating",
+                "rendering"
+            ]
+        );
+        assert!(
+            stages.windows(2).all(|pair| pair[0].1 < pair[1].1),
+            "百分比应递增"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelled_run_stops_before_llm() {
+        let token = CancellationToken::new();
+        token.cancel();
+        let err = run_minutes_with(
+            MinutesInput {
+                text: "原文",
+                members: &[],
+                today: today(),
+                title_hint: None,
+                project: None,
+                source: None,
+                metadata_created_at: None,
+                cancel: Some(&token),
+            },
+            &StubLlm::new(step2_fixture(), step3_fixture()),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.contains("已取消"));
     }
 
     #[test]
