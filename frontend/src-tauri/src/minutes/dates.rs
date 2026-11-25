@@ -14,10 +14,21 @@ static MONTH_DAY: OnceLock<Regex> = OnceLock::new();
 static SHORT: OnceLock<Regex> = OnceLock::new();
 static FULL: OnceLock<Regex> = OnceLock::new();
 
-/// Python 侧按此顺序逐个 `endswith` 判断，命中第一个即停。
+/// 逐个 `strip_suffix`，命中第一个即停；必须按字符数降序，否则 `下周三之前` 会先剥成 `下周三之`。
 const SUFFIXES: [&str; 13] = [
-    "前完成", "前", "后完成", "后", "内完成", "内", "以前", "以前完成", "前截止", "截止", "完成", "之前",
+    "以前完成",
+    "前完成",
+    "后完成",
+    "内完成",
+    "前截止",
+    "以前",
+    "之前",
     "之后",
+    "截止",
+    "完成",
+    "前",
+    "后",
+    "内",
 ];
 
 /// 将自然语言日期解析为具体日期；无法解析返回 `None`。
@@ -51,7 +62,26 @@ pub fn parse_date(input: &str, today: NaiveDate) -> Option<NaiveDate> {
         return Some(today + Duration::days(days));
     }
 
-    if let Some(c) = regex(&WEEK, r"^(本|下|上)(周|星期)([一二三四五六日天])$").captures(clean) {
+    // 周期词：剥掉「内」后剩下这些，解析为该周期的最后一天
+    match clean {
+        "本周" | "这周" => {
+            return Some(
+                today + Duration::days((6 - today.weekday().num_days_from_monday()) as i64),
+            )
+        }
+        "本月" | "这个月" => {
+            let next_month = if today.month() == 12 {
+                NaiveDate::from_ymd_opt(today.year() + 1, 1, 1)?
+            } else {
+                NaiveDate::from_ymd_opt(today.year(), today.month() + 1, 1)?
+            };
+            return Some(next_month - Duration::days(1));
+        }
+        _ => {}
+    }
+
+    if let Some(c) = regex(&WEEK, r"^(本|下|上)(周|星期)([一二三四五六日天])$").captures(clean)
+    {
         let target = match &c[3] {
             "一" => 0,
             "二" => 1,
@@ -70,8 +100,13 @@ pub fn parse_date(input: &str, today: NaiveDate) -> Option<NaiveDate> {
         return Some(today + Duration::days(days));
     }
 
-    if let Some(c) = regex(&MONTH_DAY, r"^(\d{1,2})月(\d{1,2})[日号]?$").captures(clean) {
-        return roll_over(c[1].parse().ok()?, c[2].parse().ok()?, today);
+    if let Some(c) = regex(
+        &MONTH_DAY,
+        r"^([0-9一二三四五六七八九十]{1,3})月([0-9一二三四五六七八九十]{1,3})[日号]?$",
+    )
+    .captures(clean)
+    {
+        return roll_over(parse_number(&c[1])?, parse_number(&c[2])?, today);
     }
 
     if let Some(c) = regex(&SHORT, r"^(\d{1,2})[-./](\d{1,2})$").captures(clean) {
@@ -83,6 +118,30 @@ pub fn parse_date(input: &str, today: NaiveDate) -> Option<NaiveDate> {
     }
 
     None
+}
+
+/// 阿拉伯数字或中文数字（覆盖 1–31）解析。
+fn parse_number(s: &str) -> Option<u32> {
+    s.parse::<u32>().ok().or_else(|| cn_number(s))
+}
+
+/// 中文数字：一–九、十、十X、X十、X十Y。
+fn cn_number(s: &str) -> Option<u32> {
+    fn digit(c: char) -> Option<u32> {
+        "一二三四五六七八九"
+            .chars()
+            .position(|d| d == c)
+            .map(|i| i as u32 + 1)
+    }
+    let chars: Vec<char> = s.chars().collect();
+    match chars.as_slice() {
+        ['十'] => Some(10),
+        [c] => digit(*c),
+        ['十', b] => Some(10 + digit(*b)?),
+        [a, '十'] => Some(digit(*a)? * 10),
+        [a, '十', b] => Some(digit(*a)? * 10 + digit(*b)?),
+        _ => None,
+    }
 }
 
 /// 只有月日时，若已过则推定到明年。
@@ -161,6 +220,39 @@ mod tests {
         assert_eq!(
             parse_date("2026-08-15前完成", today()),
             Some(NaiveDate::from_ymd_opt(2026, 8, 15).unwrap())
+        );
+    }
+
+    #[test]
+    fn strips_longest_suffix_first() {
+        assert_eq!(
+            parse_date("下周三之前", today()),
+            Some(NaiveDate::from_ymd_opt(2026, 8, 12).unwrap())
+        );
+    }
+
+    #[test]
+    fn cycle_words_resolve_to_period_end() {
+        // 2026-08-04 周二；本周日 = 08-09，本月末 = 08-31
+        assert_eq!(
+            parse_date("本周内", today()),
+            Some(NaiveDate::from_ymd_opt(2026, 8, 9).unwrap())
+        );
+        assert_eq!(
+            parse_date("本月内", today()),
+            Some(NaiveDate::from_ymd_opt(2026, 8, 31).unwrap())
+        );
+    }
+
+    #[test]
+    fn chinese_numerals_parse_month_day() {
+        assert_eq!(
+            parse_date("十二月五日之前", today()),
+            Some(NaiveDate::from_ymd_opt(2026, 12, 5).unwrap())
+        );
+        assert_eq!(
+            parse_date("十二月二十五日", today()),
+            Some(NaiveDate::from_ymd_opt(2026, 12, 25).unwrap())
         );
     }
 

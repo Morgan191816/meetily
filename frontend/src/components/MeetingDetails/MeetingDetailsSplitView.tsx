@@ -44,6 +44,8 @@ interface MeetingDetailsSplitViewProps {
   quality: ReactNode;
   activeTab: MeetingDetailsTab;
   onTabChange: (tab: MeetingDetailsTab) => void;
+  minutesStatus?: 'idle' | 'processing' | 'completed' | 'error';
+  minutesPercent?: number;
 }
 
 export function MeetingDetailsSplitView({
@@ -52,6 +54,8 @@ export function MeetingDetailsSplitView({
   quality,
   activeTab,
   onTabChange,
+  minutesStatus,
+  minutesPercent,
 }: MeetingDetailsSplitViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [ratio, setRatio] = useState(DEFAULT_RATIO);
@@ -132,6 +136,9 @@ export function MeetingDetailsSplitView({
               >
                 <Icon className="h-4 w-4" />
                 {tab.label}
+                {tab.value === 'summary' && minutesStatus === 'processing' && (
+                  <span className="text-xs text-blue-600">{minutesPercent}%</span>
+                )}
               </TabsTrigger>
             );
           })}
@@ -186,6 +193,9 @@ export function MeetingDetailsSplitView({
                 }`}
               >
                 {tab.label}
+                {tab.value === 'summary' && minutesStatus === 'processing' && (
+                  <span className="ml-1 text-xs text-blue-600">{minutesPercent}%</span>
+                )}
               </button>
             ))}
           </div>

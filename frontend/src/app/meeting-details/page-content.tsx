@@ -1,16 +1,14 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { MeetingSummary, SummaryProcessResponse } from '@/types';
+import { MeetingSummary } from '@/types';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import Analytics from '@/lib/analytics';
-import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { TranscriptPanel } from '@/components/MeetingDetails/TranscriptPanel';
 import { MinutesPanel } from '@/components/MeetingDetails/MinutesPanel';
 import { QualityPanel } from '@/components/MeetingDetails/QualityPanel';
 import { MeetingDetailsSplitView, type MeetingDetailsTab } from '@/components/MeetingDetails/MeetingDetailsSplitView';
-import { ModelConfig } from '@/components/ModelSettingsModal';
 import { parseSummaryContent } from '@/lib/summary-content';
 
 // Custom hooks
@@ -36,7 +34,6 @@ export default function PageContent({
 }: {
   meeting: any;
   summaryData: MeetingSummary | null;
-  initialSummary: SummaryProcessResponse | null;
   shouldAutoGenerate?: boolean;
   onAutoGenerateComplete?: () => void;
   onMeetingUpdated?: () => Promise<void>;
@@ -70,29 +67,6 @@ export default function PageContent({
   // Custom hooks
   const meetingData = useMeetingData({ meeting, summaryData, onMeetingUpdated });
 
-  // Save model config to backend database and sync via event
-  const handleSaveModelConfig = async (config?: ModelConfig) => {
-    if (!config) return;
-    try {
-      await invoke('api_save_model_config', {
-        provider: config.provider,
-        model: config.model,
-        whisperModel: config.whisperModel,
-        apiKey: config.apiKey ?? null,
-        ollamaEndpoint: config.ollamaEndpoint ?? null,
-      });
-
-      // Emit event so ConfigContext and other listeners stay in sync
-      const { emit } = await import('@tauri-apps/api/event');
-      await emit('model-config-updated', config);
-
-      toast.success('模型设置已保存');
-    } catch (error) {
-      console.error('Failed to save model config:', error);
-      toast.error('保存模型设置失败');
-    }
-  };
-
   const minutesGeneration = useMinutesGeneration(meeting.id);
   const { minutes, status: minutesStatus, loaded: minutesLoaded, generate: generateMinutes } = minutesGeneration;
 
@@ -100,8 +74,6 @@ export default function PageContent({
     meeting,
     transcripts: meetingData.transcripts,
     meetingTitle: meetingData.meetingTitle,
-    aiSummary: meetingData.aiSummary,
-    blockNoteSummaryRef: meetingData.blockNoteSummaryRef,
   });
 
   const meetingOperations = useMeetingOperations({
@@ -154,6 +126,8 @@ export default function PageContent({
       <div className="flex flex-1 min-w-0 overflow-hidden">
         <MeetingDetailsSplitView
           activeTab={activeTab}
+          minutesStatus={minutesGeneration.status}
+          minutesPercent={minutesGeneration.progress.percent}
           onTabChange={(tab) => {
             manuallySelectedTabMeetingIdsRef.current.add(meeting.id);
             setActiveTab(tab);

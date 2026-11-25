@@ -277,7 +277,6 @@ function MeetingDetailsContent() {
 
   return <PageContent
     key={meetingId}
-    initialSummary={summaryResponse}
     meeting={meetingDetails}
     summaryData={meetingSummary}
     shouldAutoGenerate={shouldAutoGenerate}
