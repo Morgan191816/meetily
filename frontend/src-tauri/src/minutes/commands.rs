@@ -318,7 +318,7 @@ fn validate_export_id(meeting_id: &str) -> Result<(), String> {
 
 /// 逐字稿按录音顺序拼接为 `[MM:SS] {text}`；空则视为不可生成。
 ///
-/// 格式对齐摘要路径（`useSummaryGeneration.ts` 的 `buildSummaryTranscriptPayload`）：
+/// 格式对齐旧摘要管线（已删除）的 `buildSummaryTranscriptPayload`：
 /// 秒数取 `audio_start_time` 向下取整，缺失时退回 `timestamp` 列。
 async fn load_transcript_text(pool: &SqlitePool, meeting_id: &str) -> Result<String, String> {
     let segments = sqlx::query_as::<_, (String, Option<f64>, String)>(

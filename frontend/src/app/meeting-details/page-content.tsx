@@ -161,6 +161,7 @@ export default function PageContent({
               progress={minutesGeneration.progress}
               minutes={minutesGeneration.minutes}
               error={minutesGeneration.error}
+              legacySummary={meetingData.aiSummary}
               onGenerate={minutesGeneration.generate}
               onCancel={() => {
                 minutesGeneration.cancel().catch(() => toast.error('取消纪要生成失败'));

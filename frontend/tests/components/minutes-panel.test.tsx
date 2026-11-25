@@ -96,6 +96,22 @@ describe('MinutesPanel', () => {
     expect(textOf(renderer!.toJSON())).toContain('决策事项');
   });
 
+  test('无新纪要时只读渲染旧版摘要并提示', async () => {
+    await act(async () => {
+      renderer = create(minutesPanel({
+        legacySummary: {
+          Decisions: { title: '决策事项', blocks: [{ id: 'b1', type: 'text', content: '确认预算', color: '' }] },
+        },
+      }));
+    });
+
+    const text = textOf(renderer!.toJSON());
+    expect(text).toContain('此纪要由旧版生成，重新生成将使用新版纪要');
+    expect(text).toContain('决策事项');
+    expect(text).toContain('确认预算');
+    expect(renderer!.root.findByType('pre').props['data-editable']).toBe('false');
+  });
+
   test('纪要面板以只读模式渲染编辑器', async () => {
     await act(async () => {
       renderer = create(minutesPanel({ minutes: '# 会议纪要' }));
