@@ -6,7 +6,7 @@ These instructions apply to AI coding agents working in this repository.
 
 - Morgan Meet is a desktop application for recording meetings, transcribing audio, and generating summaries.
 - The supported app lives in `frontend/`: Next.js/React provides the UI, and the Rust/Tauri core handles native behavior, audio, persistence, transcription, and summary orchestration.
-- Local transcription uses Whisper. Summaries use the configured local or cloud provider; do not assume every provider runs locally.
+- Local transcription defaults to SenseVoice (sherpa-onnx) with Whisper as an alternative. Meeting minutes use the unified custom OpenAI/Anthropic-compatible config; do not assume every provider runs locally.
 - Frontend code invokes Tauri commands; Rust emits events that update frontend state. Preserve existing command contracts, event payloads, and state ownership.
 
 See [architecture and audio pipeline](docs/architecture.md), including [frontend/native communication](docs/architecture.md#frontend-and-native-communication) and [model management](docs/architecture.md#transcription-and-model-management).
@@ -56,6 +56,7 @@ See [build and platform setup](docs/BUILDING.md), [development commands and debu
 | Transcription providers and workers | [transcription/](frontend/src-tauri/src/audio/transcription/) |
 | Whisper model loading and acceleration | [whisper_engine/](frontend/src-tauri/src/whisper_engine/) |
 | Summary providers and orchestration | [summary/](frontend/src-tauri/src/summary/) |
+| 会议纪要管线（纪要 / Excel / 质检） | [minutes/](frontend/src-tauri/src/minutes/) |
 | Recording UI and shared frontend state | [page.tsx](frontend/src/app/page.tsx), [SidebarProvider.tsx](frontend/src/components/Sidebar/SidebarProvider.tsx), [RecordingStateContext.tsx](frontend/src/contexts/RecordingStateContext.tsx) |
 
 ## Verification and Privacy
