@@ -49,7 +49,7 @@ export function MinutesToolbar({
         action: {
           label: '打开文件夹',
           onClick: () => {
-            void invoke('open_database_folder');
+            invoke('open_database_folder').catch(() => toast.error('打开文件夹失败'));
           },
         },
       });
@@ -68,12 +68,12 @@ export function MinutesToolbar({
             <Square size={16} />
             停止
           </Button>
-        ) : (
+        ) : hasMinutes ? (
           <Button variant="blue" size="sm" onClick={() => void onGenerate()}>
             <Play size={16} />
             生成纪要
           </Button>
-        )}
+        ) : null}
         <Button
           variant="outline"
           size="sm"
@@ -89,7 +89,7 @@ export function MinutesToolbar({
         <div className="mt-3 space-y-1">
           <Progress value={progress.percent} />
           <p className="text-center text-xs text-gray-500">
-            {STAGE_LABELS[progress.stage ?? 'correcting']} {progress.percent}%
+            {progress.stage ? `${STAGE_LABELS[progress.stage]} ${progress.percent}%` : '准备中…'}
           </p>
         </div>
       )}

@@ -39,7 +39,7 @@ export function MinutesPanel({
       {minutes ? (
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto">
           <div className="w-full p-6">
-            <BlockNoteSummaryView summaryData={{ markdown: minutes }} />
+            <BlockNoteSummaryView summaryData={{ markdown: minutes }} editable={false} />
           </div>
         </div>
       ) : (

@@ -18,7 +18,7 @@ export function QualityPanel({ quality }: QualityPanelProps) {
   return (
     <div className="h-full w-full min-w-0 flex-1 overflow-y-auto overflow-x-auto bg-white">
       <div className="w-full p-6">
-        <BlockNoteSummaryView summaryData={{ markdown: quality }} />
+        <BlockNoteSummaryView summaryData={{ markdown: quality }} editable={false} />
       </div>
     </div>
   );

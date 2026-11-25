@@ -14,19 +14,13 @@ import { ModelConfig } from '@/components/ModelSettingsModal';
 
 // Custom hooks
 import { useMeetingData } from '@/hooks/meeting-details/useMeetingData';
-import { useSummaryGeneration } from '@/hooks/meeting-details/useSummaryGeneration';
 import { useMinutesGeneration } from '@/hooks/useMinutesGeneration';
-import { useTemplates } from '@/hooks/meeting-details/useTemplates';
 import { useCopyOperations } from '@/hooks/meeting-details/useCopyOperations';
 import { useMeetingOperations } from '@/hooks/meeting-details/useMeetingOperations';
-import { useConfig } from '@/contexts/ConfigContext';
 
 export default function PageContent({
   meeting,
   summaryData,
-  initialSummary,
-  shouldAutoGenerate = false,
-  onAutoGenerateComplete,
   onMeetingUpdated,
   onRefetchTranscripts,
   // Pagination props for efficient transcript loading
@@ -65,22 +59,12 @@ export default function PageContent({
 
   const autoSwitchedSummaryMeetingIdsRef = useRef(new Set<string>());
   const manuallySelectedTabMeetingIdsRef = useRef(new Set<string>());
-  const autoGenerationStartedMeetingIdRef = useRef<string | null>(null);
 
   // Sidebar context
   const { serverAddress } = useSidebar();
 
-  // Get model config from ConfigContext
-  const { modelConfig, setModelConfig, isModelConfigLoading } = useConfig();
-
   // Custom hooks
   const meetingData = useMeetingData({ meeting, summaryData, onMeetingUpdated });
-  const templates = useTemplates();
-
-  // Callback to trigger modal open (called from error handler)
-  const handleOpenModelSettings = () => {
-    console.warn('⚠️ 模型设置入口尚未接入');
-  };
 
   // Save model config to backend database and sync via event
   const handleSaveModelConfig = async (config?: ModelConfig) => {
@@ -105,19 +89,6 @@ export default function PageContent({
     }
   };
 
-  const summaryGeneration = useSummaryGeneration({
-    initialSummary,
-    meeting,
-    transcripts: meetingData.transcripts,
-    modelConfig: modelConfig,
-    isModelConfigLoading,
-    selectedTemplate: templates.selectedTemplate,
-    onMeetingUpdated,
-    updateMeetingTitle: meetingData.updateMeetingTitle,
-    setAiSummary: meetingData.setAiSummary,
-    onOpenModelSettings: handleOpenModelSettings,
-  });
-
   const minutesGeneration = useMinutesGeneration(meeting.id);
 
   const copyOperations = useCopyOperations({
@@ -139,42 +110,14 @@ export default function PageContent({
 
   useEffect(() => {
     if (
-      (meetingData.aiSummary || summaryGeneration.summaryStatus === 'completed')
+      minutesGeneration.minutes
       && !autoSwitchedSummaryMeetingIdsRef.current.has(meeting.id)
       && !manuallySelectedTabMeetingIdsRef.current.has(meeting.id)
     ) {
       autoSwitchedSummaryMeetingIdsRef.current.add(meeting.id);
       setActiveTab('summary');
     }
-  }, [meeting.id, meetingData.aiSummary, summaryGeneration.summaryStatus]);
-
-  // Auto-generate only after the model configuration has settled.
-  useEffect(() => {
-    if (
-      !shouldAutoGenerate
-      || summaryGeneration.summaryStatus !== 'idle'
-      || isModelConfigLoading
-      || meetingData.transcripts.length === 0
-      || autoGenerationStartedMeetingIdRef.current === meeting.id
-    ) {
-      return;
-    }
-
-    autoGenerationStartedMeetingIdRef.current = meeting.id;
-    console.log(`🤖 Auto-generating summary with ${modelConfig.provider}/${modelConfig.model}...`);
-    onAutoGenerateComplete?.();
-    void summaryGeneration.handleGenerateSummary('');
-  }, [
-    shouldAutoGenerate,
-    meeting.id,
-    meetingData.transcripts.length,
-    isModelConfigLoading,
-    modelConfig.provider,
-    modelConfig.model,
-    summaryGeneration.handleGenerateSummary,
-    summaryGeneration.summaryStatus,
-    onAutoGenerateComplete,
-  ]);
+  }, [meeting.id, minutesGeneration.minutes]);
 
   return (
     <motion.div
@@ -220,7 +163,7 @@ export default function PageContent({
               error={minutesGeneration.error}
               onGenerate={minutesGeneration.generate}
               onCancel={() => {
-                void minutesGeneration.cancel();
+                minutesGeneration.cancel().catch(() => toast.error('取消纪要生成失败'));
               }}
             />
           }

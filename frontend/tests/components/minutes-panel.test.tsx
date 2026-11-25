@@ -18,9 +18,13 @@ mock.module('@tauri-apps/api/core', () => ({ invoke }));
 
 // BlockNote 编辑器依赖浏览器 DOM；测试只关心面板是否把 markdown 交给渲染器。
 mock.module('@/components/AISummary/BlockNoteSummaryView', () => ({
-  BlockNoteSummaryView: ({ summaryData }: { summaryData: { markdown?: string } | null }) => (
-    <pre>{summaryData?.markdown ?? ''}</pre>
-  ),
+  BlockNoteSummaryView: ({
+    summaryData,
+    editable,
+  }: {
+    summaryData: { markdown?: string } | null;
+    editable?: boolean;
+  }) => <pre data-editable={String(editable ?? true)}>{summaryData?.markdown ?? ''}</pre>,
 }));
 
 const { MinutesPanel } = await import('../../src/components/MeetingDetails/MinutesPanel');
@@ -75,6 +79,8 @@ describe('MinutesPanel', () => {
     });
 
     expect(textOf(renderer!.toJSON())).toContain('尚未生成会议纪要');
+    // 空态只保留一个「生成纪要」按钮（工具栏在无纪要时不重复展示）
+    expect(buttons(renderer!).filter((button) => textOf(button.children).includes('生成纪要'))).toHaveLength(1);
 
     await act(async () => {
       buttonByText(renderer!, '生成纪要').props.onClick();
@@ -88,6 +94,14 @@ describe('MinutesPanel', () => {
     });
 
     expect(textOf(renderer!.toJSON())).toContain('决策事项');
+  });
+
+  test('纪要面板以只读模式渲染编辑器', async () => {
+    await act(async () => {
+      renderer = create(minutesPanel({ minutes: '# 会议纪要' }));
+    });
+
+    expect(renderer!.root.findByType('pre').props['data-editable']).toBe('false');
   });
 
   test('导出 Excel 调用后端并提示文件位置', async () => {
@@ -114,6 +128,7 @@ describe('QualityPanel', () => {
 
     expect(textOf(renderer!.toJSON())).toContain('质检报告');
     expect(textOf(renderer!.toJSON())).toContain('溯源统计');
+    expect(renderer!.root.findByType('pre').props['data-editable']).toBe('false');
   });
 
   test('无质检报告时显示空态', async () => {
