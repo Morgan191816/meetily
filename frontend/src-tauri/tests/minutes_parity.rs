@@ -247,6 +247,8 @@ fn input<'a>(text: &'a str, members: &'a [String]) -> MinutesInput<'a> {
 }
 
 async fn run_fixture() -> MinutesOutput {
+    // 术语表是进程级 OnceLock；这里显式初始化，避免结果取决于 deviation_1/2 是否先跑
+    init_terms();
     let llm = FixtureLlm::from_fixtures();
     let text = read_fixture("transcript_raw.txt");
     let members = fixture_members();
@@ -268,6 +270,12 @@ async fn parity_minutes_structure_matches_python_golden() {
     assert_eq!(
         core_conclusion_count(markdown),
         golden.minutes.core_conclusion_count
+    );
+
+    // 编号两位零填充：改成「决策-1：」时这里必须红
+    assert!(
+        markdown.contains("- 决策-01："),
+        "决策编号应为两位零填充"
     );
 
     let decisions = decision_markers(markdown);

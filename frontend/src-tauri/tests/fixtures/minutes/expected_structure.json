@@ -1,5 +1,5 @@
 {
-  "_source": "由 Python 桥接层生成：python .tmp-task9/gen_expected.py（复现命令见 task-9-report.md）",
+  "_source": "由 Python 桥接层生成：PYTHONIOENCODING=utf-8 python reference/meetily/frontend/src-tauri/tests/fixtures/minutes/gen_expected.py",
   "_notes": [
     "excel.rows 是 Python 在真实系统日期下生成的参考值；结束日期/紧急程度依赖参考日，Rust 测试只断言稳定列（见 tests/minutes_parity.rs）。",
     "quality.h2_sections 含 Python 恒输出的「待确认沉淀候选」，Rust 已裁定不输出该空节（偏离 #5）。"

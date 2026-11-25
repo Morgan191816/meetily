@@ -2,7 +2,7 @@
 
 复现：
     cd "D:/claude project/local meeting"
-    python .tmp-task9/gen_expected.py
+    PYTHONIOENCODING=utf-8 python reference/meetily/frontend/src-tauri/tests/fixtures/minutes/gen_expected.py
 """
 
 import json
