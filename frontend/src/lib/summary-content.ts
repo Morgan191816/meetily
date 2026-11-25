@@ -93,3 +93,33 @@ export function parseSummaryContent(value: unknown): MeetingSummary | null {
   }
   return hasVisibleSummaryContent(value) ? value : null;
 }
+
+/** 旧摘要转 markdown；仅 BlockNote 区块（summary_json）时返回 null，由渲染器直接渲染。 */
+export function summaryToMarkdown(value: unknown): string | null {
+  const summary = parseSummaryContent(value);
+  if (!summary) {
+    return null;
+  }
+  if (typeof summary.markdown === 'string' && summary.markdown.trim()) {
+    return summary.markdown;
+  }
+
+  const sections = Object.entries(summary)
+    .filter(([key]) => !['markdown', 'summary_json', '_section_order', 'MeetingName'].includes(key))
+    .map(([, section]) => {
+      const legacy = parseSummaryObject(section);
+      if (typeof legacy?.title !== 'string' || !Array.isArray(legacy.blocks)) {
+        return '';
+      }
+      const blocks = legacy.blocks
+        .map((block) => parseSummaryObject(block)?.content)
+        .filter((content): content is string => typeof content === 'string' && content.trim().length > 0)
+        .map((content) => `- ${content}`)
+        .join('\n');
+      return blocks ? `## ${legacy.title}\n\n${blocks}` : '';
+    })
+    .filter(Boolean)
+    .join('\n\n');
+
+  return sections || null;
+}

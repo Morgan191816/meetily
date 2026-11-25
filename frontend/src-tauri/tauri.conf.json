@@ -102,7 +102,6 @@
             "icons/app_icon.ico"
         ],
         "resources": [
-            "templates/*.json",
             "resources/terms.json",
             "resources/THIRD-PARTY-NOTICES.md"
         ],

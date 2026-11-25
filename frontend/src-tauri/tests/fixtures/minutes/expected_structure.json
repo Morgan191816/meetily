@@ -1,0 +1,107 @@
+{
+  "_source": "由 Python 桥接层生成：PYTHONIOENCODING=utf-8 python reference/meetily/frontend/src-tauri/tests/fixtures/minutes/gen_expected.py",
+  "_notes": [
+    "excel.rows 是 Python 在真实系统日期下生成的参考值；结束日期/紧急程度依赖参考日，Rust 测试只断言稳定列（见 tests/minutes_parity.rs）。",
+    "quality.h2_sections 含 Python 恒输出的「待确认沉淀候选」，Rust 已裁定不输出该空节（偏离 #5）。"
+  ],
+  "minutes": {
+    "frontmatter_keys": [
+      "type",
+      "title",
+      "date",
+      "project",
+      "attendees",
+      "action_items",
+      "open_action_items",
+      "source"
+    ],
+    "h2_sections": [
+      "核心结论",
+      "会议议题",
+      "决策事项",
+      "行动项",
+      "风险与阻碍",
+      "处理状态",
+      "溯源出处"
+    ],
+    "core_conclusion_count": 1,
+    "decision_count": 1,
+    "decision_markers": [
+      "已溯源"
+    ],
+    "action_table_header": "| 序号 | 任务名称 | 责任人 | 参与人 | 截止日期 | 状态 |",
+    "action_row_count": 2,
+    "action_markers": [
+      "待核实",
+      "待核实"
+    ],
+    "has_open_issues": false,
+    "has_next_meeting": false,
+    "has_evidence": true
+  },
+  "excel": {
+    "headers": [
+      "任务名称",
+      "责任人",
+      "参与人",
+      "结束日期",
+      "上级任务",
+      "紧急程度",
+      "开始日期",
+      "描述",
+      "风险点",
+      "难度点",
+      "需协助点",
+      "开放下级任务"
+    ],
+    "row_count": 3,
+    "data_row_count": 2,
+    "rows": [
+      [
+        "跟进冯亚项目进度",
+        "龙哥",
+        "林工",
+        "2026-11-27",
+        "",
+        "紧急",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      [
+        "提交整改资料",
+        "张工",
+        "",
+        "2026-11-24",
+        "",
+        "紧急",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    ]
+  },
+  "quality": {
+    "h2_sections": [
+      "溯源校验",
+      "[溯源校验报告]",
+      "质量自检",
+      "[质量自检报告]",
+      "任务冲突检测",
+      "待确认沉淀候选"
+    ],
+    "traceability_stats": [
+      "- ✅ 已验证: 1 项 | ⚠️ 推论: 0 项 | ❌ 无依据: 3 项"
+    ],
+    "quality_stats": [
+      "- [错误] 0 项 | [警告] 2 项 | [建议] 8 项"
+    ],
+    "has_pending_feedback_section": true
+  }
+}

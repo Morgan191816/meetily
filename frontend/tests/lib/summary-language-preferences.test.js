@@ -12,6 +12,9 @@ function installLocalStorage() {
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: {
+      // Real @tauri-apps/api invoke reads this at call time; keeps the test
+      // independent of module-mock ordering across test files.
+      __TAURI_INTERNALS__: { invoke: invokeMock },
       localStorage: {
         getItem: (key) => values.get(key) ?? null,
         setItem: (key, value) => {
@@ -34,6 +37,7 @@ function installFailingLocalStorage() {
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: {
+      __TAURI_INTERNALS__: { invoke: invokeMock },
       localStorage: {
         getItem: () => null,
         setItem: () => {

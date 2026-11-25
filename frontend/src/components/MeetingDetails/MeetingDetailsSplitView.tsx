@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { FileText, Sparkles } from 'lucide-react';
+import { FileText, ShieldCheck, Sparkles } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 const STORAGE_KEY = 'meetily.meetingDetails.transcriptPaneRatio';
 const DEFAULT_RATIO = 0.3;
@@ -11,7 +11,11 @@ const MAX_RATIO = 0.5;
 const TABS = [
   { value: 'transcript' as const, label: '逐字稿', icon: FileText },
   { value: 'summary' as const, label: '纪要', icon: Sparkles },
+  { value: 'quality' as const, label: '质检', icon: ShieldCheck },
 ];
+
+// 桌面端逐字稿固定显示在左侧，右侧在纪要/质检之间切换
+const RIGHT_TABS = TABS.filter((tab) => tab.value !== 'transcript');
 
 function readStoredRatio(): number {
   if (typeof window === 'undefined') return DEFAULT_RATIO;
@@ -32,18 +36,20 @@ function writeStoredRatio(value: number): void {
   }
 }
 
-export type MeetingDetailsTab = 'transcript' | 'summary';
+export type MeetingDetailsTab = 'transcript' | 'summary' | 'quality';
 
 interface MeetingDetailsSplitViewProps {
   transcript: ReactNode;
-  summary: ReactNode;
+  minutes: ReactNode;
+  quality: ReactNode;
   activeTab: MeetingDetailsTab;
   onTabChange: (tab: MeetingDetailsTab) => void;
 }
 
 export function MeetingDetailsSplitView({
   transcript,
-  summary,
+  minutes,
+  quality,
   activeTab,
   onTabChange,
 }: MeetingDetailsSplitViewProps) {
@@ -103,8 +109,9 @@ export function MeetingDetailsSplitView({
   const transcriptPanelProps = isDesktop
     ? { role: 'region' as const, 'aria-label': '逐字稿', tabIndex: -1 }
     : {};
-  const summaryPanelProps = isDesktop
-    ? { role: 'region' as const, 'aria-label': '纪要', tabIndex: -1 }
+  const rightTab = activeTab === 'quality' ? 'quality' : 'summary';
+  const rightPanelProps = isDesktop
+    ? { role: 'region' as const, 'aria-label': rightTab === 'quality' ? '质检' : '纪要', tabIndex: -1 }
     : {};
 
   return (
@@ -161,14 +168,31 @@ export function MeetingDetailsSplitView({
         >
           <div className="h-full w-px bg-gray-200 transition-[width,background-color] duration-150 ease-out group-hover:w-1 group-hover:bg-blue-400 group-active:w-1 group-active:bg-blue-500" />
         </div>
-        <TabsContent
-          value="summary"
-          forceMount
-          className="mt-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden md:data-[state=inactive]:flex"
-          {...summaryPanelProps}
+        <div
+          className={`mt-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${activeTab === 'transcript' ? 'hidden md:flex' : 'flex'}`}
+          {...rightPanelProps}
         >
-          {summary}
-        </TabsContent>
+          <div className="hidden shrink-0 items-center gap-1 border-b border-gray-200 bg-white px-3 py-1 md:flex">
+            {RIGHT_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => onTabChange(tab.value)}
+                aria-pressed={rightTab === tab.value}
+                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+                  rightTab === tab.value
+                    ? 'bg-gray-100 text-gray-900'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {activeTab === 'quality' ? quality : minutes}
+          </div>
+        </div>
       </div>
     </Tabs>
   );

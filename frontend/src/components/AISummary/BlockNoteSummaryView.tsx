@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import dynamic from 'next/dynamic';
 import { Summary, SummaryDataResponse, SummaryFormat, BlockNoteBlock } from '@/types';
-import { AISummary } from './index';
 import { Block } from '@blocknote/core';
 import { zh } from '@blocknote/core/locales';
 import { useCreateBlockNote } from '@blocknote/react';
@@ -27,6 +26,7 @@ interface BlockNoteSummaryViewProps {
     created_at: string;
   };
   onDirtyChange?: (isDirty: boolean) => void;
+  editable?: boolean;
 }
 
 export interface BlockNoteSummaryViewRef {
@@ -74,7 +74,8 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
   error = null,
   onRegenerateSummary,
   meeting,
-  onDirtyChange
+  onDirtyChange,
+  editable = true,
 }, ref) => {
   const { format, data } = detectSummaryFormat(summaryData);
   const [isDirty, setIsDirty] = useState(false);
@@ -219,21 +220,6 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
     isDirty
   }), [handleSave, isDirty, editor, format, currentBlocks, data]);
 
-  // Render legacy format
-  if (format === 'legacy') {
-    console.log('🎨 Rendering LEGACY format');
-    return (
-      <AISummary
-        summary={summaryData as Summary}
-        status={status}
-        error={error}
-        onSummaryChange={onSummaryChange || (() => { })}
-        onRegenerateSummary={onRegenerateSummary || (() => { })}
-        meeting={meeting}
-      />
-    );
-  }
-
   // Render BlockNote format (has summary_json)
   if (format === 'blocknote') {
     console.log('🎨 Rendering BLOCKNOTE format (direct)');
@@ -246,7 +232,7 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
               console.log('📝 Editor blocks changed:', blocks.length);
               handleEditorChange(blocks);
             }}
-            editable={true}
+            editable={editable}
           />
         </div>
       </div>
@@ -261,7 +247,7 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
         <div className="w-full">
           <BlockNoteView
             editor={editor}
-            editable={true}
+            editable={editable}
             onChange={() => {
               if (isContentLoaded.current) {
                 handleEditorChange(editor.document);
