@@ -1,20 +1,18 @@
-# Meetily Privacy Policy
+# Morgan Meet Privacy Policy
 
 *Last updated: [Current Date]*
 
 ## Our Privacy-First Commitment
 
-Meetily is built on the principle that your meeting data should remain private and under your control. This privacy policy explains how we handle data in our open-source meeting assistant.
+Morgan Meet is built on the principle that your meeting data should remain private and under your control. This privacy policy explains how we handle data in our open-source meeting assistant.
 
 ## Data Processing Philosophy
 
 ### Local-First Processing
-- **Meeting transcription**: Processed entirely on your device using local Whisper models
+- **Meeting transcription**: Processed entirely on your device using local models (SenseVoice, optional Whisper)
 - **Audio recordings**: Never transmitted to external servers
 - **Meeting content**: Remains on your infrastructure
-- **AI summaries**: Generated locally or through your chosen LLM provider
-
-Official builds may fetch seasonal assets from meetily.ai.
+- **AI summaries**: Generated through the LLM provider you configure; nothing is sent elsewhere
 
 ### Your Data Ownership
 - You own all meeting data, transcripts, and recordings
@@ -66,9 +64,8 @@ We will notify users of any material changes to this privacy policy through:
 ## Contact Us
 
 For privacy-related questions or concerns:
-- **GitHub Issues**: [Create an issue](https://github.com/Zackriya-Solutions/meeting-minutes/issues)
-- **Email**: [Contact form](https://www.zackriya.com/service-interest-form/)
-- **Community**: [Discord](https://discord.gg/crRymMQBFH)
+- **问题反馈**：在本仓库 [提交 issue](../../issues)
+- **内部联系**：联系项目维护人（Morgan）
 
 ## Open Source Commitment
 
@@ -80,4 +77,4 @@ As an open-source project under MIT license, you can:
 
 ---
 
-*This privacy policy applies to Meetily v0.0.5 and later versions. For enterprise deployments, additional privacy controls may be available.*
+*本政策适用于 Morgan Meet 1.0.0 及之后的版本。*

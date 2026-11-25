@@ -62,8 +62,8 @@ Use `pnpm install --frozen-lockfile` to install the committed dependency set. Wh
 
 2. Clone the repository and navigate to the frontend directory:
    ```bash
-   git clone https://github.com/Zackriya-Solutions/meeting-minutes
-   cd meeting-minutes/frontend
+   git clone https://github.com/Morgan191816/meetily
+   cd meetily/frontend
    ```
   
 
@@ -82,8 +82,8 @@ Use `pnpm install --frozen-lockfile` to install the committed dependency set. Wh
 
 2. Clone the repository and navigate to the frontend directory:
    ```cmd
-   git clone https://github.com/Zackriya-Solutions/meeting-minutes
-   cd meeting-minutes/frontend
+   git clone https://github.com/Morgan191816/meetily
+   cd meetily/frontend
    ```
 
 3. Install dependencies:

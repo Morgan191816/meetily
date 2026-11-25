@@ -1,11 +1,11 @@
-# Contributing to Meetily
+# Contributing to Morgan Meet
 
-Thank you for contributing to Meetily! Current application work belongs in `frontend/` and its Rust/Tauri core; `backend/` is an unsupported legacy archive.
+Thank you for contributing to Morgan Meet! Current application work belongs in `frontend/` and its Rust/Tauri core; `backend/` is an unsupported legacy archive.
 
 ## Before You Start
 
 > [!IMPORTANT]
-> Before starting contribution work, and again before proposing publication, search [open and closed issues](https://github.com/Zackriya-Solutions/meetily/issues?q=is%3Aissue) and [open and closed PRs](https://github.com/Zackriya-Solutions/meetily/pulls?q=is%3Apr). Search the underlying problem, related components, and alternative wording, not just the proposed title.
+> Before starting contribution work, and again before proposing publication, search [open and closed issues](../../issues?q=is%3Aissue) and [open and closed PRs](../../pulls?q=is%3Apr) in this repository. Search the underlying problem, related components, and alternative wording, not just the proposed title.
 >
 > Use an existing issue when it covers the problem; an issue without an implementation is still an opportunity to contribute. If a PR already implements the same change, coordinate with its author before starting a competing contribution. Discuss a materially different approach before proceeding separately.
 
@@ -27,37 +27,30 @@ Thank you for contributing to Meetily! Current application work belongs in `fron
 
 ### Branch Strategy
 
-- `main` - Production branch
-- `devtest` - Development and testing branch
-- Feature branches should be created from `devtest`
+- `main` - Upstream sync baseline
+- `cn` - 中文版主线（所有功能开发与发布都从这里出）
+- Feature branches should be created from `cn`
 
 ### Getting Started
 
-1. Fork the repository
-2. Clone your fork:
+1. Clone the repository:
 
    ```bash
-   git clone https://github.com/YOUR_USERNAME/meetily.git
+   git clone https://github.com/Morgan191816/meetily.git
    cd meetily
    ```
 
-3. Add the original repository as upstream:
+2. Create a new branch from `cn`:
 
    ```bash
-   git remote add upstream https://github.com/Zackriya-Solutions/meetily.git
-   ```
-
-4. Create a new branch from `devtest`:
-
-   ```bash
-   git checkout devtest
-   git pull upstream devtest
+   git checkout cn
+   git pull
    git checkout -b feature/your-feature-name
    ```
 
 ### Development Process
 
-1. Always start your work from the `devtest` branch
+1. Always start your work from the `cn` branch
 2. Create a new branch for each feature/fix
 3. Make your changes
 4. Write or update tests as needed
@@ -66,7 +59,7 @@ Thank you for contributing to Meetily! Current application work belongs in `fron
 
 ### Issue Creation
 
-Use the [issue forms](https://github.com/Zackriya-Solutions/meetily/issues/new/choose) for bug reports, feature requests, and documentation issues. Search existing issues and PRs first. If a report already exists, add useful reproduction details there rather than opening another report.
+Use the [issue forms](../../issues/new/choose) for bug reports, feature requests, and documentation issues. Search existing issues and PRs first. If a report already exists, add useful reproduction details there rather than opening another report.
 
 For bugs, provide the app version, OS and architecture, installation method, reproduction steps, and expected versus actual behavior. Include relevant settings, redacted logs, or screenshots where useful. Build-tool versions are only needed when relevant to a source-build problem.
 
@@ -75,12 +68,12 @@ For bugs, provide the app version, OS and architecture, installation method, rep
 
 ### Pull Request Process
 
-1. Open a focused PR from your feature branch to `devtest`.
+1. Open a focused PR from your feature branch to `cn`.
 2. Link related issues or discussions when applicable. Link overlapping PRs and explain any distinct approach; do not create duplicate work silently.
 3. Complete the [PR template](.github/pull_request_template.md), including your duplicate search and verification results.
 4. Review your own changes, run relevant local checks, and report their results.
 5. Request maintainer review and address feedback.
-6. Keep the PR up to date with `devtest`. A maintainer merges it after approval.
+6. Keep the PR up to date with `cn`. A maintainer merges it after approval.
 
 ### Submission Templates
 
@@ -133,19 +126,18 @@ Types:
 
 1. PRs require at least one review
 2. Address all review comments
-3. Keep the PR up to date with `devtest`
+3. Keep the PR up to date with `cn`
 4. Squash commits if requested
 
 ## Getting Help
 
-- Ask usage and setup questions in the [Meetily community chat](https://discord.gg/crRymMQBFH).
+- Ask the project maintainer directly for usage and setup questions.
 - Use the [development resources](#development-resources) below for development questions.
 - Use issues for actionable bug reports, feature requests, and documentation problems.
 
 ## Development Resources
 
 - [Build instructions](docs/BUILDING.md)
-- [Linux build instructions](docs/building_in_linux.md)
 - [GPU acceleration guide](docs/GPU_ACCELERATION.md)
 - [Architecture overview](docs/architecture.md)
 - [PR template](.github/pull_request_template.md)
