@@ -147,7 +147,8 @@ export function useMinutesGeneration(meetingId: string) {
     try {
       const cancelled = await invoke<boolean>('api_cancel_minutes', { meetingId });
       if (!cancelled) {
-        // 后端没有在途任务：不复位 cancelledRef，让在途 Promise 按真实结果收尾
+        // 后端没有在途任务：catch 由 runId 判断，这里复位只恢复在途运行的进度/错误事件流
+        cancelledRef.current = false;
         return false;
       }
     } catch (cause) {

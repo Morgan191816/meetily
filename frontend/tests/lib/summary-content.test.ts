@@ -48,11 +48,11 @@ describe('summaryToMarkdown', () => {
   });
 
   test('does not output MeetingName metadata', () => {
+    // MeetingName 以带内容的 section 形态出现，才能真正覆盖排除逻辑
     const markdown = summaryToMarkdown({
-      MeetingName: 'InternalName',
+      MeetingName: { title: '会议名称', blocks: [{ content: 'InternalName' }] },
       Decisions: { title: '决策事项', blocks: [{ content: '确认预算' }] },
     });
-    expect(markdown).toContain('决策事项');
-    expect(markdown).not.toContain('InternalName');
+    expect(markdown).toBe('## 决策事项\n\n- 确认预算');
   });
 });

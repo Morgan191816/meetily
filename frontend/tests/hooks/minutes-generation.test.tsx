@@ -130,6 +130,10 @@ describe('useMinutesGeneration', () => {
     expect(cancelled).toBe(false);
     expect(state.status).toBe('processing');
 
+    // 未命中取消时事件流必须恢复，否则在途运行的进度被静默
+    await emit('minutes-progress', { meetingId: 'meeting-a', stage: 'summarizing', percent: 40 });
+    expect(state.progress).toEqual({ stage: 'summarizing', percent: 40 });
+
     await act(async () => {
       rejectGenerate(new Error('模型不可用'));
       await generation;
@@ -211,6 +215,32 @@ describe('useMinutesGeneration', () => {
     expect(state.status).toBe('idle');
     expect(state.error).toBeNull();
     expect(state.minutes).toBe('# 旧纪要');
+  });
+
+  test('取消后旧运行成功返回不覆盖已取消的 idle', async () => {
+    let resolveGenerate!: (value: unknown) => void;
+    generateMinutes = () => new Promise((resolve) => {
+      resolveGenerate = resolve;
+    });
+    await show();
+
+    let generation!: Promise<void>;
+    await act(async () => {
+      generation = state.generate();
+    });
+
+    await act(async () => {
+      expect(await state.cancel()).toBe(true);
+    });
+    expect(state.status).toBe('idle');
+
+    // 旧运行的 Promise 成功返回时 runId 已过期，不得覆盖 idle
+    await act(async () => {
+      resolveGenerate(record({ markdown: '# 旧运行' }));
+      await generation;
+    });
+    expect(state.status).toBe('idle');
+    expect(state.minutes).toBeNull();
   });
 
   test('取消后迟到的进度事件不把状态改回 processing', async () => {

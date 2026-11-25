@@ -85,10 +85,15 @@ function MeetingDetailsContent() {
       // Check what's currently in database
       const currentConfig = await invoke('api_get_model_config') as any;
 
-      // If DB already has a model, use it (never override!)
+      // 纪要后端只认 custom-openai 配置：DB 里有 model 不代表能生成纪要
       if (currentConfig && currentConfig.model) {
-        console.log('Using existing model from DB:', currentConfig.model);
-        setShouldAutoGenerate(true);
+        const customConfig = await invoke('api_get_custom_openai_config') as any;
+        if (customConfig && customConfig.model) {
+          console.log('Using existing custom OpenAI model:', customConfig.model);
+          setShouldAutoGenerate(true);
+        } else {
+          console.log('未配置自定义服务，跳过自动生成');
+        }
         setHasCheckedAutoGen(true);
         return;
       }

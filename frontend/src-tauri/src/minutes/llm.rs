@@ -17,6 +17,10 @@ const SYSTEM_PROMPT: &str = "你是一个专业的会议记录助手。";
 /// 照 assistant_bridge.py:259-269 的富结构 schema。
 const STEP2_JSON_SCHEMA: &str = r#"{"title": "会议标题", "date": "YYYY-MM-DD", "decisions": [{"content": "决策内容", "basis": "决策依据", "effective_date": "生效时间或空"}], "topics": [{"title": "议题名", "discussion": "讨论要点", "conclusion": "结论", "disagreement": "分歧点或空"}], "risks": [{"description": "风险描述", "severity": "高/中/低", "mitigation": "缓解措施", "owner": "负责人"}], "open_issues": ["待决问题"], "next_meeting": {"date": "下次会议日期或空", "agenda": "议程"}}"#;
 
+/// STEP2_JSON_SCHEMA 中的占位值；模型只回显 schema 时据此识别。
+const PLACEHOLDER_TITLE: &str = "会议标题";
+const PLACEHOLDER_DECISION: &str = "决策内容";
+
 /// reasoning 模型在 JSON 前输出的思考标记（照 qwen_client.py:81-86）。
 const REASONING_MARKERS: &[&str] = &[
     "Here's a thinking process:",
@@ -125,7 +129,8 @@ async fn call_llm(params: &LlmParams<'_>, user_prompt: &str) -> Result<String, S
     if completion.reasoning.trim().is_empty() {
         return Err("大模型返回内容为空，请检查模型设置或稍后重试".to_string());
     }
-    Ok(completion.reasoning)
+    // reasoning 里可能有草稿/示例围栏，优先取结束位置最靠后的合法 JSON
+    Ok(last_json_text(&completion.reasoning).unwrap_or(completion.reasoning))
 }
 
 /// step2：会议总结。Python 版解析失败按空结构处理，这里返回可读错误。
@@ -134,7 +139,12 @@ pub async fn summarize(
     corrected_text: &str,
 ) -> Result<MinutesDraft, String> {
     let raw = call_llm(params, &step2_prompt(corrected_text)).await?;
-    parse_step2_json(&raw).ok_or_else(|| "纪要总结返回内容无法解析为 JSON".to_string())
+    let draft = parse_step2_json(&raw)
+        .ok_or_else(|| "纪要总结返回内容无法解析为 JSON".to_string())?;
+    if is_schema_echo(&draft) {
+        return Err("大模型只返回了示例结构，请重试".to_string());
+    }
+    Ok(draft)
 }
 
 /// step3：任务拆解。解析失败重试一次（照 assistant_bridge.py:314-325）。
@@ -249,6 +259,16 @@ pub fn parse_step2_json(raw: &str) -> Option<MinutesDraft> {
     })
 }
 
+/// 只回显了 step2 schema 占位（reasoning 被截断时常见）：标题与全部决策都是占位值。
+fn is_schema_echo(draft: &MinutesDraft) -> bool {
+    draft.title == PLACEHOLDER_TITLE
+        && !draft.decisions.is_empty()
+        && draft
+            .decisions
+            .iter()
+            .all(|decision| decision.content == PLACEHOLDER_DECISION)
+}
+
 /// 解析 step3；接受数组或 `{tasks|行动项}` 包装对象，脏元素跳过而非整体失败。
 pub fn parse_step3_json(raw: &str) -> Vec<TaskItem> {
     extract_json(raw, false)
@@ -299,6 +319,21 @@ fn extract_json(raw: &str, want_object: bool) -> Option<Value> {
         }
     }
     best.map(|(_, value)| value)
+}
+
+/// reasoning 文本常含草稿/示例围栏：扫描全文，取结束位置最靠后的合法 JSON。
+fn last_json_text(raw: &str) -> Option<String> {
+    let mut best: Option<(usize, Value)> = None;
+    for (start, _) in raw.match_indices(|c: char| c == '{' || c == '[') {
+        let mut stream = serde_json::Deserializer::from_str(&raw[start..]).into_iter::<Value>();
+        if let Some(Ok(value)) = stream.next() {
+            let end = start + stream.byte_offset();
+            if best.as_ref().is_none_or(|(best_end, _)| end > *best_end) {
+                best = Some((end, value));
+            }
+        }
+    }
+    best.map(|(_, value)| value.to_string())
 }
 
 fn strip_reasoning_preamble(content: &str) -> &str {
@@ -482,6 +517,41 @@ mod tests {
                 .content,
             "首先确认方案"
         );
+    }
+
+    #[test]
+    fn last_json_text_prefers_the_last_fenced_block() {
+        let raw = "草稿：\n```json\n{\"title\":\"草稿\"}\n```\n正式：\n```json\n{\"title\":\"正式\"}\n```";
+        assert_eq!(last_json_text(raw).unwrap(), r#"{"title":"正式"}"#);
+    }
+
+    #[test]
+    fn last_json_text_scans_past_prose_and_non_json_fences() {
+        let raw = "参考片段：\n```\n逐字稿块\n```\n最终答案：{\"title\":\"A\"}\n完毕。";
+        assert_eq!(last_json_text(raw).unwrap(), r#"{"title":"A"}"#);
+    }
+
+    #[test]
+    fn last_json_text_returns_none_without_json() {
+        assert!(last_json_text("不是 JSON，也没有花括号").is_none());
+    }
+
+    #[test]
+    fn detects_schema_placeholder_echo() {
+        // 占位常量必须与 step2 prompt 实际使用的 schema 一致
+        let schema: Value = serde_json::from_str(STEP2_JSON_SCHEMA).unwrap();
+        assert_eq!(schema["title"].as_str(), Some(PLACEHOLDER_TITLE));
+        assert_eq!(
+            schema["decisions"][0]["content"].as_str(),
+            Some(PLACEHOLDER_DECISION)
+        );
+
+        assert!(is_schema_echo(&parse_step2_json(STEP2_JSON_SCHEMA).unwrap()));
+        let real = parse_step2_json(
+            r#"{"title":"会议标题","decisions":[{"content":"结案"}]}"#,
+        )
+        .unwrap();
+        assert!(!is_schema_echo(&real));
     }
 
     #[test]
