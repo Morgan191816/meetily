@@ -7,6 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use tokio_util::sync::CancellationToken;
 
 use crate::summary::llm_client::{generate_summary, LLMProvider};
 use crate::summary::CustomOpenAIConfig;
@@ -95,6 +96,8 @@ pub struct TaskItem {
 pub struct LlmParams<'a> {
     pub client: &'a reqwest::Client,
     pub config: &'a CustomOpenAIConfig,
+    /// 在途请求的取消令牌；点「停止」可中断 HTTP 调用。
+    pub cancel: Option<&'a CancellationToken>,
 }
 
 async fn call_llm(params: &LlmParams<'_>, user_prompt: &str) -> Result<String, String> {
@@ -111,15 +114,18 @@ async fn call_llm(params: &LlmParams<'_>, user_prompt: &str) -> Result<String, S
         Some(8192),
         Some(0.3),
         None,
-        None,
+        params.cancel,
     )
     .await
     .map_err(|error| format!("调用大模型失败：{error}"))?;
-    // content 为 null 时 completion 是空串，不能当成成功
-    if completion.content.trim().is_empty() {
+    // content 为 null 时 completion.content 是空串，回退 reasoning_content（照 qwen_client.py:69-75）
+    if !completion.content.trim().is_empty() {
+        return Ok(completion.content);
+    }
+    if completion.reasoning.trim().is_empty() {
         return Err("大模型返回内容为空，请检查模型设置或稍后重试".to_string());
     }
-    Ok(completion.content)
+    Ok(completion.reasoning)
 }
 
 /// step2：会议总结。Python 版解析失败按空结构处理，这里返回可读错误。

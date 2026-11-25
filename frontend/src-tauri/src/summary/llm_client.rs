@@ -137,6 +137,8 @@ impl ClaudeChatResponse {
             .to_string();
         Some(LlmCompletion {
             content,
+            // Anthropic 协议无 reasoning 字段，保持空串
+            reasoning: String::new(),
             reasoning_stripped: self.content.iter().any(|block| {
                 matches!(block.block_type.as_str(), "thinking" | "redacted_thinking")
             }),
@@ -147,6 +149,8 @@ impl ClaudeChatResponse {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LlmCompletion {
     pub content: String,
+    /// 私有推理文本；旧摘要路径不读取，只供 minutes 在 content 为空时回退。
+    pub reasoning: String,
     pub reasoning_stripped: bool,
 }
 
@@ -157,6 +161,14 @@ impl ChatResponse {
             .first()
             .ok_or("No content in LLM response")?
             .message;
+        // reasoning_content 优先，为空再取 reasoning（照 qwen_client.py:69-75）
+        let reasoning = [message.reasoning_content.as_deref(), message.reasoning.as_deref()]
+            .into_iter()
+            .flatten()
+            .map(str::trim)
+            .find(|text| !text.is_empty())
+            .unwrap_or_default()
+            .to_string();
         Ok(LlmCompletion {
             content: message
                 .content
@@ -164,10 +176,8 @@ impl ChatResponse {
                 .unwrap_or_default()
                 .trim()
                 .to_string(),
-            reasoning_stripped: [message.reasoning.as_deref(), message.reasoning_content.as_deref()]
-                .into_iter()
-                .flatten()
-                .any(|reasoning| !reasoning.trim().is_empty()),
+            reasoning_stripped: !reasoning.is_empty(),
+            reasoning,
         })
     }
 }
@@ -639,10 +649,23 @@ mod tests {
                 response.completion().unwrap(),
                 LlmCompletion {
                     content: String::new(),
+                    reasoning: "private".to_string(),
                     reasoning_stripped: true,
                 }
             );
         }
+    }
+
+    #[test]
+    fn reasoning_content_is_exposed_for_minutes_fallback() {
+        let response: ChatResponse = serde_json::from_value(json!({
+            "choices": [{"message": {"content": null, "reasoning_content": "{\"a\":1}"}}]
+        }))
+        .unwrap();
+        let completion = response.completion().unwrap();
+        assert_eq!(completion.content, "");
+        assert_eq!(completion.reasoning, "{\"a\":1}");
+        assert!(completion.reasoning_stripped);
     }
 
     #[test]
@@ -780,6 +803,7 @@ mod tests {
             completion,
             LlmCompletion {
                 content: "ok".to_string(),
+                reasoning: String::new(),
                 reasoning_stripped: false,
             }
         );
@@ -1036,6 +1060,7 @@ mod tests {
                 .unwrap(),
             LlmCompletion {
                 content: "Meeting summary.".to_string(),
+                reasoning: String::new(),
                 reasoning_stripped: false,
             }
         );
@@ -1055,6 +1080,7 @@ mod tests {
             response.completion(),
             Some(LlmCompletion {
                 content: "Meeting summary.".to_string(),
+                reasoning: String::new(),
                 reasoning_stripped: true,
             })
         );

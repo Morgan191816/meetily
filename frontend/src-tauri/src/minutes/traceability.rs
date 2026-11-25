@@ -361,7 +361,7 @@ fn extract_keywords(text: &str) -> Vec<String> {
             '：' => cleaned.push(':'),
             '（' => cleaned.push('('),
             '）' => cleaned.push(')'),
-            '"' | '「' | '」' | ' ' => {}
+            '"' | '“' | '”' | '「' | '」' | ' ' => {}
             _ => cleaned.push(c),
         }
     }
@@ -477,6 +477,16 @@ mod tests {
     fn sources_are_trimmed_around_match() {
         let r = verify_claim("华硕不落总灯已经结案", SRC, ClaimKind::Decision);
         assert!(r.sources[0].chars().count() <= 80, "出处片段应截断");
+    }
+
+    #[test]
+    fn keyword_cleaning_drops_curly_quotes() {
+        // 弯引号（“ ”）与 ASCII 引号一样被剔除
+        let keywords = extract_keywords("“华硕不落总灯”已经结案");
+        assert!(keywords
+            .iter()
+            .all(|kw| !kw.contains('“') && !kw.contains('”')));
+        assert!(keywords.iter().any(|kw| kw.contains("华硕")));
     }
 
     // ── 阈值表逐档 ──

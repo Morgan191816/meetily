@@ -9,6 +9,7 @@ pub mod names;
 pub mod orchestrator;
 pub mod quality;
 pub mod render;
+pub mod roster;
 pub mod traceability;
 pub mod urgency;
 pub mod validate;

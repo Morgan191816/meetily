@@ -47,20 +47,6 @@ pub(crate) fn contains_reasoning_marker(markdown: &str) -> bool {
     THINK_MARKER_REGEX.is_match(markdown)
 }
 
-pub fn require_visible_markdown(stage: &str, cleaned: &CleanedLlmMarkdown) -> Result<(), String> {
-    if contains_reasoning_marker(&cleaned.markdown) {
-        Err(format!(
-            "{stage}包含未闭合的推理标记"
-        ))
-    } else if cleaned.markdown.is_empty() {
-        Err(format!(
-            "{stage}在移除推理内容后不含可见纪要内容"
-        ))
-    } else {
-        Ok(())
-    }
-}
-
 /// Maps a BCP-47 tag to the English language name used inside LLM prompts.
 ///
 /// Regional tags (`pt-BR`, `en_GB`) are normalised to their base language;
@@ -148,27 +134,17 @@ mod tests {
             "Visible\n<think class=\"internal\">private",
         ] {
             let cleaned = clean_llm_markdown_detailed(raw);
-            assert_eq!(
-                require_visible_markdown("最终纪要", &cleaned),
-                Err("最终纪要包含未闭合的推理标记".to_string())
-            );
+            assert!(contains_reasoning_marker(&cleaned.markdown));
         }
     }
 
     #[test]
-    fn reasoning_only_and_empty_fences_fail_visible_content_guard() {
+    fn reasoning_only_and_empty_fences_leave_no_visible_markdown() {
         let reasoning_only = clean_llm_markdown_detailed("<think>private</think>");
-        assert_eq!(
-            require_visible_markdown("最终纪要", &reasoning_only),
-            Err("最终纪要在移除推理内容后不含可见纪要内容".to_string())
-        );
+        assert!(reasoning_only.markdown.is_empty());
         for raw in ["```\n```", "```markdown\n```", "```\r\n```", "```markdown\r\n```"] {
             let empty_fence = clean_llm_markdown_detailed(raw);
             assert_eq!(empty_fence.markdown, "");
-            assert_eq!(
-                require_visible_markdown("翻译结果", &empty_fence),
-                Err("翻译结果在移除推理内容后不含可见纪要内容".to_string())
-            );
         }
     }
 

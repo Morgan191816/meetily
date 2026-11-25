@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{LazyLock, Mutex};
 
-use chrono::Utc;
+use chrono::{Local, Utc};
 use serde::Serialize;
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
@@ -25,10 +25,11 @@ use crate::summary::CustomOpenAIConfig;
 static MINUTES_CANCELLATIONS: LazyLock<Mutex<HashMap<String, CancellationToken>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// 生产 LLM：统一模型配置 + reqwest 客户端。
+/// 生产 LLM：统一模型配置 + reqwest 客户端 + 取消令牌。
 struct ReqwestMinutesLlm {
     client: reqwest::Client,
     config: CustomOpenAIConfig,
+    cancel: CancellationToken,
 }
 
 #[async_trait::async_trait]
@@ -38,6 +39,7 @@ impl MinutesLlm for ReqwestMinutesLlm {
             &crate::minutes::llm::LlmParams {
                 client: &self.client,
                 config: &self.config,
+                cancel: Some(&self.cancel),
             },
             corrected_text,
         )
@@ -49,6 +51,7 @@ impl MinutesLlm for ReqwestMinutesLlm {
             &crate::minutes::llm::LlmParams {
                 client: &self.client,
                 config: &self.config,
+                cancel: Some(&self.cancel),
             },
             corrected_text,
         )
@@ -105,11 +108,13 @@ pub async fn api_generate_minutes<R: Runtime>(
         .unwrap_or_else(|| meeting.created_at.0.to_rfc3339());
     let source = metadata.audio_file.clone();
 
+    // 先建令牌再建 LLM：复用同一 token，让「停止」能中断在途 HTTP 请求
+    let token = CancellationToken::new();
     let llm = ReqwestMinutesLlm {
         client: reqwest::Client::new(),
         config,
+        cancel: token.clone(),
     };
-    let token = CancellationToken::new();
     // 检查与写入同一把锁内完成：并发生成时后者直接失败，避免互相顶掉取消令牌
     if !register_cancellation(&meeting_id, token.clone()) {
         return Err("该会议正在生成纪要，请稍候".to_string());
@@ -129,9 +134,9 @@ pub async fn api_generate_minutes<R: Runtime>(
     let result = run_minutes_with_progress(
         MinutesInput {
             text: &transcript,
-            // 无成员名单来源（无 diarization，`speaker` 列无写入方）：参会人恒为空
-            members: &[],
-            today: Utc::now().date_naive(),
+            // 内嵌 OA 名单（见 minutes::roster），对齐 Python 自动加载 members.json
+            members: crate::minutes::roster::member_names(),
+            today: Local::now().date_naive(),
             title_hint: Some(meeting.title.as_str()),
             project: project.as_deref(),
             source: source.as_deref(),
@@ -157,6 +162,12 @@ pub async fn api_generate_minutes<R: Runtime>(
             return Err(error);
         }
     };
+
+    // 取消可能落在最后检查点与落库之间：写库前再确认一次，取消则不落库、不 emit done
+    if token.is_cancelled() {
+        clear_cancellation(&meeting_id);
+        return Err("纪要生成已取消".to_string());
+    }
 
     let now = Utc::now().to_rfc3339();
     let saved = async {
@@ -230,8 +241,11 @@ pub async fn api_get_minutes<R: Runtime>(
     let Some((markdown, quality_markdown, tasks_json, traceability_pass, validation_pass, created_at, updated_at)) = row else {
         return Ok(None);
     };
-    let tasks: Vec<TaskItem> = serde_json::from_str(&tasks_json)
-        .map_err(|error| format!("纪要行动项数据损坏：{error}"))?;
+    // 行动项损坏时降级为空数组，不能连带隐藏完好的 markdown
+    let tasks: Vec<TaskItem> = serde_json::from_str(&tasks_json).unwrap_or_else(|error| {
+        log::warn!("会议纪要行动项解析失败，按空处理：meeting_id={meeting_id}, error={error}");
+        Vec::new()
+    });
 
     Ok(Some(MinutesRecord {
         meeting_id,
@@ -283,7 +297,7 @@ pub async fn api_export_minutes_excel<R: Runtime>(
     let tasks: Vec<TaskItem> = serde_json::from_str(&tasks_json)
         .map_err(|error| format!("纪要行动项数据损坏：{error}"))?;
 
-    let bytes = build_workbook_bytes(&tasks, Utc::now().date_naive())?;
+    let bytes = build_workbook_bytes(&tasks, Local::now().date_naive())?;
     let export_dir = app
         .path()
         .app_data_dir()
