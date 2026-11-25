@@ -61,6 +61,52 @@ pub fn require_visible_markdown(stage: &str, cleaned: &CleanedLlmMarkdown) -> Re
     }
 }
 
+/// Maps a BCP-47 tag to the English language name used inside LLM prompts.
+///
+/// Regional tags (`pt-BR`, `en_GB`) are normalised to their base language;
+/// Chinese variants are disambiguated. Unknown codes return None so callers
+/// fall back to English rather than injecting a literal ISO code.
+pub(crate) fn language_name_from_code(code: &str) -> Option<&'static str> {
+    let normalised = code.to_ascii_lowercase().replace('_', "-");
+    let lookup: &str = match normalised.as_str() {
+        "zh-cn" => "zh",
+        "zh-tw" => return Some("Traditional Chinese"),
+        other => other.split('-').next().unwrap_or(other),
+    };
+    match lookup {
+        "en" => Some("English"),
+        "zh" => Some("Chinese"),
+        "de" => Some("German"),
+        "es" => Some("Spanish"),
+        "ru" => Some("Russian"),
+        "ko" => Some("Korean"),
+        "fr" => Some("French"),
+        "ja" => Some("Japanese"),
+        "pt" => Some("Portuguese"),
+        "it" => Some("Italian"),
+        "nl" => Some("Dutch"),
+        "pl" => Some("Polish"),
+        "ar" => Some("Arabic"),
+        "hi" => Some("Hindi"),
+        "ta" => Some("Tamil"),
+        "tr" => Some("Turkish"),
+        "vi" => Some("Vietnamese"),
+        "th" => Some("Thai"),
+        "id" => Some("Indonesian"),
+        "sv" => Some("Swedish"),
+        "cs" => Some("Czech"),
+        "da" => Some("Danish"),
+        "fi" => Some("Finnish"),
+        "el" => Some("Greek"),
+        "he" => Some("Hebrew"),
+        "hu" => Some("Hungarian"),
+        "no" => Some("Norwegian"),
+        "ro" => Some("Romanian"),
+        "uk" => Some("Ukrainian"),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
