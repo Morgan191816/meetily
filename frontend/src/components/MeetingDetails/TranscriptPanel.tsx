@@ -127,6 +127,14 @@ export function TranscriptPanel({
     if (!speakerLabels.includes(speakerFilter)) setSpeakerFilter('all');
   }, [speakerLabels, speakerFilter]);
 
+  // 筛选只作用于已加载页：选中具体说话人时逐页补拉，直到全部加载完
+  useEffect(() => {
+    if (activeFilter === 'all' || !hasMore || isLoadingMore || !onLoadMore) return;
+    // 150ms 大于 loadMore 的 100ms 防抖，避免调用被丢弃后停住
+    const timer = setTimeout(() => onLoadMore(), 150);
+    return () => clearTimeout(timer);
+  }, [activeFilter, hasMore, isLoadingMore, onLoadMore]);
+
   const visibleSegments = useMemo(
     () => (activeFilter === 'all' ? convertedSegments : convertedSegments.filter((s) => s.speaker === activeFilter)),
     [convertedSegments, activeFilter],
@@ -169,6 +177,9 @@ export function TranscriptPanel({
         )}
         {diarization.unavailable && !hasSpeakers && (
           <span className="text-sm text-amber-700">未安装说话人模型，无法区分说话人（可在设置中下载）</span>
+        )}
+        {activeFilter !== 'all' && hasMore && (
+          <span className="text-sm text-gray-600">正在加载全部逐字稿…</span>
         )}
         {hasSpeakers && (
           <select

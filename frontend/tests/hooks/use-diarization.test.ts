@@ -26,7 +26,7 @@ const invoke = mock(async (command: string): Promise<unknown> => {
 });
 mock.module('@tauri-apps/api/core', () => ({ invoke }));
 
-const { availabilityAfterCheck, failureAfterRun, useDiarization } = await import('../../src/hooks/useDiarization');
+const { availabilityAfterCheck, errorAfterCancel, failureAfterRun, useDiarization } = await import('../../src/hooks/useDiarization');
 
 let state: ReturnType<typeof useDiarization>;
 function View({ meetingId }: { meetingId: string }) {
@@ -90,6 +90,16 @@ describe('failureAfterRun', () => {
       progress: 0,
       error: '解码音频失败：坏文件',
     });
+  });
+});
+
+describe('errorAfterCancel', () => {
+  test('取消不算失败，不显示错误', () => {
+    expect(errorAfterCancel('已取消')).toBeNull();
+  });
+
+  test('真实错误原样返回', () => {
+    expect(errorAfterCancel('解码音频失败：坏文件')).toBe('解码音频失败：坏文件');
   });
 });
 

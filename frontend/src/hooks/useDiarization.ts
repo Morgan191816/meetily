@@ -34,6 +34,11 @@ export function failureAfterRun(error: string): {
   return { status: 'idle', progress: 0, error };
 }
 
+/** 取消不是失败：与自动路径一致，错误串含「已取消」时不提示。 */
+export function errorAfterCancel(error: string): string | null {
+  return error.includes('已取消') ? null : error;
+}
+
 /**
  * 说话人分离状态：进度与结果由后端事件驱动。
  * `nameKey` 递增表示只需重拉显示名，`labelKey` 递增表示标签已写库、逐字稿需重拉。
@@ -159,10 +164,11 @@ export function useDiarization(meetingId: string) {
     try {
       await invoke<number>('api_run_diarization', { meetingId });
     } catch (raw) {
-      const failure = failureAfterRun(String(raw));
+      const message = String(raw);
+      const failure = failureAfterRun(message);
       setStatus(failure.status);
       setProgress(failure.progress);
-      setError(failure.error);
+      setError(errorAfterCancel(message));
     }
   }, [meetingId]);
 

@@ -4,7 +4,7 @@ use super::model::{
     base_url, inspect_models, model_dir, DiarizationModelStatus, EMBEDDING_FILE,
     EMBEDDING_SHA256, EMBEDDING_SIZE, SEGMENTATION_FILE, SEGMENTATION_SHA256, SEGMENTATION_SIZE,
 };
-use super::runner::{cancel_run, run_guarded};
+use super::runner::{cancel_run, run_queued};
 use super::store::{list_speakers, set_display_name, SpeakerRow};
 use crate::audio::transcription::sensevoice::model::{cleanup_partials, download_file};
 use crate::state::AppState;
@@ -193,7 +193,7 @@ pub async fn api_run_diarization<R: Runtime>(
     state: tauri::State<'_, AppState>,
     meeting_id: String,
 ) -> Result<usize, String> {
-    run_guarded(app, state.db_manager.pool().clone(), meeting_id)
+    run_queued(app, state.db_manager.pool().clone(), meeting_id)
         .await
         .map(|outcome| outcome.labels)
 }

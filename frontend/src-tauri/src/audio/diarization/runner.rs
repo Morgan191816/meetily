@@ -6,7 +6,7 @@ use crate::audio::decoder::decode_audio_file;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio_util::sync::CancellationToken;
@@ -19,9 +19,14 @@ pub struct DiarizationOutcome {
 static ACTIVE_RUNS: LazyLock<Mutex<HashMap<String, CancellationToken>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// 排队等槽位的自动任务；取消它与取消在跑任务等效。
-static PENDING_RUNS: LazyLock<Mutex<HashMap<String, CancellationToken>>> =
+/// 排队等槽位的任务；取消它与取消在跑任务等效。
+static PENDING_RUNS: LazyLock<Mutex<HashMap<String, Arc<CancellationToken>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// 旧任务在阶段边界才响应取消，`diarize_blocking` 不可中断：
+/// 2 小时会议要跑 10–30 分钟，排队必须等得起。
+const QUEUE_POLL: Duration = Duration::from_millis(500);
+const QUEUE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
 /// 离开作用域即释放槽位：`run_for_meeting` 返回 Err 或 panic 都不会卡住该会议。
 struct RunGuard(String);
@@ -45,18 +50,33 @@ fn claim(meeting_id: &str) -> Result<CancellationToken, String> {
     Ok(token)
 }
 
-/// 注册 → 运行 → 移除。命令路径与自动触发共用，同一会议不并发分离。
-pub(crate) async fn run_guarded<R: Runtime>(
+/// 登记排队令牌 → 等槽位 → 运行 → 释放令牌。手动与自动共用：旧任务不可中断时排队而非拒绝。
+pub(crate) async fn run_queued<R: Runtime>(
     app: AppHandle<R>,
     pool: SqlitePool,
     meeting_id: String,
 ) -> Result<DiarizationOutcome, String> {
-    let token = claim(&meeting_id)?;
-    let _guard = RunGuard(meeting_id.clone());
-    run_for_meeting(app, pool, meeting_id, token).await
+    let pending = Arc::new(CancellationToken::new());
+    if let Ok(mut runs) = PENDING_RUNS.lock() {
+        // 覆盖同会议旧令牌前先取消它，避免两个排队者抢跑
+        if let Some(previous) = runs.insert(meeting_id.clone(), pending.clone()) {
+            previous.cancel();
+        }
+    }
+    let result = run_when_free(app, pool, meeting_id.clone(), pending.clone()).await;
+    // 只有仍是自己的令牌才移除，别把新一轮的排队抹掉
+    if let Ok(mut runs) = PENDING_RUNS.lock() {
+        if runs
+            .get(&meeting_id)
+            .is_some_and(|token| Arc::ptr_eq(token, &pending))
+        {
+            runs.remove(&meeting_id);
+        }
+    }
+    result
 }
 
-/// 取消在途分离或排队中的自动任务；两者都没有时返回 false。
+/// 取消在途分离或排队中的任务；两者都没有时返回 false。
 pub(crate) fn cancel_run(meeting_id: &str) -> bool {
     let active = ACTIVE_RUNS
         .lock()
@@ -88,15 +108,7 @@ pub fn spawn_auto_diarization<R: Runtime>(app: AppHandle<R>, pool: SqlitePool, m
     }
     tauri::async_runtime::spawn(async move {
         let id = meeting_id.clone();
-        let pending = CancellationToken::new();
-        if let Ok(mut runs) = PENDING_RUNS.lock() {
-            runs.insert(id.clone(), pending.clone());
-        }
-        let result = run_when_free(app.clone(), pool, meeting_id, pending).await;
-        if let Ok(mut runs) = PENDING_RUNS.lock() {
-            runs.remove(&id);
-        }
-        if let Err(error) = result {
+        if let Err(error) = run_queued(app.clone(), pool, meeting_id).await {
             log::warn!("自动说话人分离失败：meeting_id={id}, error={error}");
             // 取消不算失败：前端已自行复位，不弹错误
             if !error.contains("已取消") {
@@ -109,15 +121,16 @@ pub fn spawn_auto_diarization<R: Runtime>(app: AppHandle<R>, pool: SqlitePool, m
     });
 }
 
-/// 等槽位释放后再跑：取消后立刻重转写时，旧任务可能仍占着槽位。
-/// 500ms × 60 次（约 30s）后放弃；排队期间被取消则直接放弃。
+/// 等槽位释放后再跑：旧任务可能还要跑 10–30 分钟。
+/// 超过 `QUEUE_TIMEOUT` 才放弃；排队期间被取消则直接放弃。
 async fn run_when_free<R: Runtime>(
     app: AppHandle<R>,
     pool: SqlitePool,
     meeting_id: String,
-    pending: CancellationToken,
+    pending: Arc<CancellationToken>,
 ) -> Result<DiarizationOutcome, String> {
-    for _ in 0..60 {
+    let mut waited = Duration::ZERO;
+    while waited < QUEUE_TIMEOUT {
         if pending.is_cancelled() {
             return Err("已取消".to_string());
         }
@@ -125,7 +138,8 @@ async fn run_when_free<R: Runtime>(
             let _guard = RunGuard(meeting_id.clone());
             return run_for_meeting(app, pool, meeting_id, token).await;
         }
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        tokio::time::sleep(QUEUE_POLL).await;
+        waited += QUEUE_POLL;
     }
     Err("该会议正在区分说话人".to_string())
 }
