@@ -1,15 +1,86 @@
 //! 分离运行器：解码 → sherpa 处理 → 对齐 → 写库。
 
 use super::align::{assign_speakers, label_for, DiarSegment};
-use super::model::{model_dir, EMBEDDING_FILE, SEGMENTATION_FILE};
+use super::model::{inspect_models, model_dir, EMBEDDING_FILE, SEGMENTATION_FILE};
 use crate::audio::decoder::decode_audio_file;
 use sqlx::SqlitePool;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio_util::sync::CancellationToken;
 
 pub struct DiarizationOutcome {
     pub labels: usize,
+}
+
+/// 在途分离任务，`cancel_run` 按 meeting_id 取消。
+static ACTIVE_RUNS: LazyLock<Mutex<HashMap<String, CancellationToken>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// 离开作用域即释放槽位：`run_for_meeting` 返回 Err 或 panic 都不会卡住该会议。
+struct RunGuard(String);
+
+impl Drop for RunGuard {
+    fn drop(&mut self) {
+        if let Ok(mut runs) = ACTIVE_RUNS.lock() {
+            runs.remove(&self.0);
+        }
+    }
+}
+
+/// 抢占会议槽位；该会议已在分离时返回 Err。
+fn claim(meeting_id: &str) -> Result<CancellationToken, String> {
+    let mut runs = ACTIVE_RUNS.lock().unwrap();
+    if runs.contains_key(meeting_id) {
+        return Err("该会议正在区分说话人".to_string());
+    }
+    let token = CancellationToken::new();
+    runs.insert(meeting_id.to_string(), token.clone());
+    Ok(token)
+}
+
+/// 注册 → 运行 → 移除。命令路径与自动触发共用，同一会议不并发分离。
+pub(crate) async fn run_guarded<R: Runtime>(
+    app: AppHandle<R>,
+    pool: SqlitePool,
+    meeting_id: String,
+) -> Result<DiarizationOutcome, String> {
+    let token = claim(&meeting_id)?;
+    let _guard = RunGuard(meeting_id.clone());
+    run_for_meeting(app, pool, meeting_id, token).await
+}
+
+/// 取消在途分离；没有在跑的任务返回 false。
+pub(crate) fn cancel_run(meeting_id: &str) -> bool {
+    match ACTIVE_RUNS.lock().unwrap().get(meeting_id) {
+        Some(token) => {
+            token.cancel();
+            true
+        }
+        None => false,
+    }
+}
+
+/// 模型就绪时后台分离；缺失时发一次性提示。三处触发点共用。
+pub fn spawn_auto_diarization<R: Runtime>(app: AppHandle<R>, pool: SqlitePool, meeting_id: String) {
+    let ready = app
+        .path()
+        .app_data_dir()
+        .map(|data| inspect_models(&model_dir(&data)).state == "available")
+        .unwrap_or(false);
+    if !ready {
+        let _ = app.emit(
+            "diarization-unavailable",
+            serde_json::json!({ "meetingId": meeting_id }),
+        );
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = run_guarded(app, pool, meeting_id).await {
+            log::warn!("自动说话人分离失败：{error}");
+        }
+    });
 }
 
 fn build_config(dir: &Path) -> sherpa_onnx::OfflineSpeakerDiarizationConfig {
@@ -184,6 +255,17 @@ mod tests {
                 .unwrap();
         }
         pool
+    }
+
+    #[test]
+    fn claim_rejects_second_run_and_guard_frees_slot() {
+        let id = "test-claim-meeting";
+        let token = claim(id).unwrap();
+        assert!(claim(id).is_err(), "同一会议不应并发抢占槽位");
+        drop(RunGuard(id.to_string()));
+        assert!(!token.is_cancelled(), "抢占失败不应取消在跑任务");
+        assert!(claim(id).is_ok(), "槽位释放后应可再次抢占");
+        drop(RunGuard(id.to_string()));
     }
 
     #[tokio::test]

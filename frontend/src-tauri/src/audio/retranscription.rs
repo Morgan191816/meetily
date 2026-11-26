@@ -461,6 +461,13 @@ async fn run_retranscription<R: Runtime>(
         meeting_id
     );
 
+    // 与 api_save_transcript 一致：模型就绪才后台分离
+    crate::audio::diarization::runner::spawn_auto_diarization(
+        app.clone(),
+        pool.clone(),
+        meeting_id.clone(),
+    );
+
     // Write updated transcripts.json and metadata.json to the meeting folder
     emit_progress(&app, &meeting_id, "saving", 90, "正在写入逐字稿文件…");
 

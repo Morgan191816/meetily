@@ -658,6 +658,13 @@ async fn run_import<R: Runtime>(
         warn!("Failed to write metadata.json: {}", e);
     }
 
+    // 与 api_save_transcript 一致：模型就绪才后台分离
+    crate::audio::diarization::runner::spawn_auto_diarization(
+        app.clone(),
+        app_state.db_manager.pool().clone(),
+        meeting_id.clone(),
+    );
+
     emit_progress(&app, "complete", 100, "导入完成");
 
     Ok(ImportResult {

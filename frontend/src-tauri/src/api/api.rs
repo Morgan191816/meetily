@@ -726,7 +726,7 @@ pub async fn api_save_meeting_title<R: Runtime>(
 
 #[tauri::command]
 pub async fn api_save_transcript<R: Runtime>(
-    _app: AppHandle<R>,
+    app: AppHandle<R>,
     state: tauri::State<'_, AppState>,
     meeting_title: String,
     transcripts: Vec<serde_json::Value>,
@@ -766,6 +766,11 @@ pub async fn api_save_transcript<R: Runtime>(
             log_info!(
                 "Successfully saved transcript and created meeting with id: {}",
                 meeting_id
+            );
+            crate::audio::diarization::runner::spawn_auto_diarization(
+                app.clone(),
+                pool.clone(),
+                meeting_id.clone(),
             );
             Ok(serde_json::json!({
                 "status": "success",
