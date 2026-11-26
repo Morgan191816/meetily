@@ -3,8 +3,10 @@
 import { Transcript, TranscriptSegmentData } from '@/types';
 import { TranscriptView } from '@/components/TranscriptView';
 import { VirtualizedTranscriptView } from '@/components/VirtualizedTranscriptView';
+import { speakerText } from '@/components/Transcript/SpeakerBadge';
 import { TranscriptButtonGroup } from './TranscriptButtonGroup';
-import { useMemo } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { useEffect, useMemo, useState } from 'react';
 
 interface TranscriptPanelProps {
   transcripts: Transcript[];
@@ -65,10 +67,40 @@ export function TranscriptPanel({
     }));
   }, [transcripts, usePagination, segments]);
 
+  const [speakerNames, setSpeakerNames] = useState<Record<string, string>>({});
+  const [speakerFilter, setSpeakerFilter] = useState<string>('all');
+
+  useEffect(() => {
+    if (!meetingId) return;
+    let cancelled = false;
+    invoke<{ label: string; displayName: string | null }[]>('api_get_meeting_speakers', { meetingId })
+      .then((rows) => {
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        rows.forEach((row) => { if (row.displayName) map[row.label] = row.displayName; });
+        setSpeakerNames(map);
+      })
+      .catch((error) => console.error('加载说话人失败:', error));
+    return () => { cancelled = true; };
+  }, [meetingId]);
+
+  const speakerLabels = useMemo(
+    () => Array.from(new Set(convertedSegments.map((s) => s.speaker).filter(Boolean) as string[])).sort(),
+    [convertedSegments],
+  );
+  const hasSpeakers = speakerLabels.length > 0;
+  // 重新转写后标签可能变化：失效的筛选回落为「全部」，避免下拉显示全部而列表为空
+  const activeFilter = speakerLabels.includes(speakerFilter) ? speakerFilter : 'all';
+
+  const visibleSegments = useMemo(
+    () => (activeFilter === 'all' ? convertedSegments : convertedSegments.filter((s) => s.speaker === activeFilter)),
+    [convertedSegments, activeFilter],
+  );
+
   return (
     <div className="flex h-full min-w-0 w-full bg-white flex-col relative @container">
       {/* Title area */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 border-b border-gray-200 flex items-center justify-center gap-2">
         <TranscriptButtonGroup
           transcriptCount={usePagination ? (totalCount ?? convertedSegments.length) : (transcripts?.length || 0)}
           onCopyTranscript={onCopyTranscript}
@@ -77,12 +109,25 @@ export function TranscriptPanel({
           meetingFolderPath={meetingFolderPath}
           onRefetchTranscripts={onRefetchTranscripts}
         />
+        {hasSpeakers && (
+          <select
+            value={activeFilter}
+            onChange={(e) => setSpeakerFilter(e.target.value)}
+            className="rounded border border-gray-200 px-2 py-1 text-sm"
+            aria-label="按说话人筛选"
+          >
+            <option value="all">全部说话人</option>
+            {speakerLabels.map((label) => (
+              <option key={label} value={label}>{speakerText(label, speakerNames[label])}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Transcript content - use virtualized view for better performance */}
       <div className="flex-1 overflow-hidden pb-4">
         <VirtualizedTranscriptView
-          segments={convertedSegments}
+          segments={visibleSegments}
           isRecording={isRecording}
           isPaused={false}
           isProcessing={false}
@@ -95,6 +140,8 @@ export function TranscriptPanel({
           totalCount={totalCount}
           loadedCount={loadedCount}
           onLoadMore={onLoadMore}
+          names={speakerNames}
+          onSpeakerClick={(label) => setSpeakerFilter(label)}
         />
       </div>
 

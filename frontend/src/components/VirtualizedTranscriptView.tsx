@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { RecordingStatusBar } from "./RecordingStatusBar";
 import { motion, AnimatePresence } from "framer-motion";
 import { TranscriptSegmentData } from "@/types";
+import { SpeakerBadge } from "./Transcript/SpeakerBadge";
 
 export interface VirtualizedTranscriptViewProps {
     /** Transcript segments to display */
@@ -34,6 +35,10 @@ export interface VirtualizedTranscriptViewProps {
     totalCount?: number;
     loadedCount?: number;
     onLoadMore?: () => void;
+
+    // Speaker display (label → display name) and badge click handler
+    names?: Record<string, string>;
+    onSpeakerClick?: (label: string) => void;
 }
 
 // Threshold for enabling virtualization (below this, use simple rendering)
@@ -83,6 +88,9 @@ const TranscriptSegment = memo(function TranscriptSegment({
     confidenceEstimated,
     isStreaming,
     showConfidence,
+    speaker,
+    speakerName,
+    onSpeakerClick,
 }: {
     id: string;
     timestamp: number;
@@ -91,12 +99,22 @@ const TranscriptSegment = memo(function TranscriptSegment({
     confidenceEstimated?: boolean;
     isStreaming: boolean;
     showConfidence: boolean;
+    speaker?: string | null;
+    speakerName?: string | null;
+    onSpeakerClick?: (label: string) => void;
 }) {
     const displayText = cleanStopWords(text) || (text.trim() === '' ? '[静音]' : text);
 
     return (
         <div id={`segment-${id}`} className="mb-3">
             <div className="flex items-start gap-2">
+                {speaker && (
+                    <SpeakerBadge
+                        label={speaker}
+                        displayName={speakerName}
+                        onClick={onSpeakerClick ? () => onSpeakerClick(speaker) : undefined}
+                    />
+                )}
                 <Tooltip>
                     <TooltipTrigger>
                         <span className="text-xs text-gray-400 mt-1 flex-shrink-0 min-w-[56px] tabular-nums">
@@ -137,6 +155,8 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
     totalCount = 0,
     loadedCount = 0,
     onLoadMore,
+    names,
+    onSpeakerClick,
 }) => {
     // Create scroll ref first - shared between virtualizer and auto-scroll hook
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -310,6 +330,9 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         confidenceEstimated={segment.confidenceEstimated}
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
+                                        speaker={segment.speaker}
+                                        speakerName={names?.[segment.speaker ?? '']}
+                                        onSpeakerClick={onSpeakerClick}
                                     />
                                 </div>
                             );
@@ -367,6 +390,9 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         confidenceEstimated={segment.confidenceEstimated}
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
+                                        speaker={segment.speaker}
+                                        speakerName={names?.[segment.speaker ?? '']}
+                                        onSpeakerClick={onSpeakerClick}
                                     />
                                 </motion.div>
                             );
