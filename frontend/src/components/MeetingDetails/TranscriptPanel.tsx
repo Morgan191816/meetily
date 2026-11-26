@@ -164,7 +164,7 @@ export function TranscriptPanel({
             </Button>
           </>
         )}
-        {diarization.status !== 'processing' && meetingId && convertedSegments.length > 0 && (
+        {diarization.status !== 'processing' && diarization.status !== 'unavailable' && meetingId && convertedSegments.length > 0 && (
           <Button variant="outline" size="sm" onClick={() => void diarization.rerun()}>
             重新分离
           </Button>

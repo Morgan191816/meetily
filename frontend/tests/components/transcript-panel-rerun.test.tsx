@@ -102,4 +102,9 @@ describe('重新分离入口', () => {
     await show('processing');
     expect(rerunButton()).toHaveLength(0);
   });
+
+  test('unavailable 状态不显示重跑', async () => {
+    await show('unavailable');
+    expect(rerunButton()).toHaveLength(0);
+  });
 });
