@@ -85,9 +85,24 @@ mod tests {
 
     #[test]
     fn tie_takes_earlier_segment() {
-        let rows = vec![(Some(1.0), Some(3.0))];
-        let segments = [seg(0.0, 2.0, 5), seg(2.0, 4.0, 6)];
-        assert_eq!(assign_speakers(&rows, &segments), vec![Some(0)]);
+        // 行 2 与三段等量重叠：数组首个是 6、开始最早是 5、数组末尾是 7，只有按开始时间取才得 5
+        let rows = vec![(Some(0.0), Some(1.0)), (Some(1.0), Some(3.0))];
+        let segments = [seg(2.0, 4.0, 6), seg(0.0, 2.0, 5), seg(1.5, 2.5, 7)];
+        assert_eq!(assign_speakers(&rows, &segments), vec![Some(0), Some(0)]);
+    }
+
+    #[test]
+    fn picks_larger_overlap_over_earlier_positive_overlap() {
+        let rows = vec![(Some(0.0), Some(1.0)), (Some(0.0), Some(3.0))];
+        let segments = [seg(0.0, 1.0, 5), seg(1.0, 3.0, 6)];
+        assert_eq!(assign_speakers(&rows, &segments), vec![Some(0), Some(1)]);
+    }
+
+    #[test]
+    fn exactly_half_second_gap_is_not_inherited() {
+        let rows = vec![(Some(0.0), Some(1.0)), (Some(1.5), Some(2.0))];
+        let segments = [seg(0.0, 1.0, 4)];
+        assert_eq!(assign_speakers(&rows, &segments), vec![Some(0), None]);
     }
 
     #[test]
