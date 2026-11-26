@@ -461,6 +461,8 @@ async fn run_retranscription<R: Runtime>(
         meeting_id
     );
 
+    // 先取消旧分离：旧任务占着槽位时新的自动分离会被拒绝，新逐字稿将永久无标签
+    crate::audio::diarization::runner::cancel_run(&meeting_id);
     // 与 api_save_transcript 一致：模型就绪才后台分离
     crate::audio::diarization::runner::spawn_auto_diarization(
         app.clone(),

@@ -1,0 +1,3 @@
+-- transcripts.speaker 自 20261126000000_meeting_speakers.sql 起由说话人分离独占：
+-- 只存 SPEAKER_xx 标签，20251110000001 里 mic/system 的旧语义作废。
+-- 本迁移仅记录该约定，无结构变更（不改旧迁移，避免已有安装校验和不匹配）。

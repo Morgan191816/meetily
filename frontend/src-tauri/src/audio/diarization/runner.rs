@@ -7,6 +7,7 @@ use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio_util::sync::CancellationToken;
 
@@ -16,6 +17,10 @@ pub struct DiarizationOutcome {
 
 /// 在途分离任务，`cancel_run` 按 meeting_id 取消。
 static ACTIVE_RUNS: LazyLock<Mutex<HashMap<String, CancellationToken>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// 排队等槽位的自动任务；取消它与取消在跑任务等效。
+static PENDING_RUNS: LazyLock<Mutex<HashMap<String, CancellationToken>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// 离开作用域即释放槽位：`run_for_meeting` 返回 Err 或 panic 都不会卡住该会议。
@@ -51,15 +56,19 @@ pub(crate) async fn run_guarded<R: Runtime>(
     run_for_meeting(app, pool, meeting_id, token).await
 }
 
-/// 取消在途分离；没有在跑的任务返回 false。
+/// 取消在途分离或排队中的自动任务；两者都没有时返回 false。
 pub(crate) fn cancel_run(meeting_id: &str) -> bool {
-    match ACTIVE_RUNS.lock().unwrap().get(meeting_id) {
-        Some(token) => {
-            token.cancel();
-            true
-        }
-        None => false,
-    }
+    let active = ACTIVE_RUNS
+        .lock()
+        .unwrap()
+        .get(meeting_id)
+        .map(|token| token.cancel());
+    let pending = PENDING_RUNS
+        .lock()
+        .unwrap()
+        .get(meeting_id)
+        .map(|token| token.cancel());
+    active.is_some() || pending.is_some()
 }
 
 /// 模型就绪时后台分离；缺失时发一次性提示。三处触发点共用。
@@ -79,10 +88,46 @@ pub fn spawn_auto_diarization<R: Runtime>(app: AppHandle<R>, pool: SqlitePool, m
     }
     tauri::async_runtime::spawn(async move {
         let id = meeting_id.clone();
-        if let Err(error) = run_guarded(app, pool, meeting_id).await {
+        let pending = CancellationToken::new();
+        if let Ok(mut runs) = PENDING_RUNS.lock() {
+            runs.insert(id.clone(), pending.clone());
+        }
+        let result = run_when_free(app.clone(), pool, meeting_id, pending).await;
+        if let Ok(mut runs) = PENDING_RUNS.lock() {
+            runs.remove(&id);
+        }
+        if let Err(error) = result {
             log::warn!("自动说话人分离失败：meeting_id={id}, error={error}");
+            // 取消不算失败：前端已自行复位，不弹错误
+            if !error.contains("已取消") {
+                let _ = app.emit(
+                    "diarization-error",
+                    serde_json::json!({ "meetingId": id, "error": error }),
+                );
+            }
         }
     });
+}
+
+/// 等槽位释放后再跑：取消后立刻重转写时，旧任务可能仍占着槽位。
+/// 500ms × 60 次（约 30s）后放弃；排队期间被取消则直接放弃。
+async fn run_when_free<R: Runtime>(
+    app: AppHandle<R>,
+    pool: SqlitePool,
+    meeting_id: String,
+    pending: CancellationToken,
+) -> Result<DiarizationOutcome, String> {
+    for _ in 0..60 {
+        if pending.is_cancelled() {
+            return Err("已取消".to_string());
+        }
+        if let Ok(token) = claim(&meeting_id) {
+            let _guard = RunGuard(meeting_id.clone());
+            return run_for_meeting(app, pool, meeting_id, token).await;
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    Err("该会议正在区分说话人".to_string())
 }
 
 fn build_config(dir: &Path) -> sherpa_onnx::OfflineSpeakerDiarizationConfig {
@@ -122,9 +167,13 @@ fn resolve_audio_path(folder: &Path) -> Result<PathBuf, String> {
                 .map(str::to_string)
         });
     if let Some(name) = named {
-        let path = folder.join(&name);
-        if path.is_file() {
-            return Ok(path);
+        // 只接受目录内的单个文件名：`..` 或绝对路径可读到会议目录外
+        let candidate = Path::new(&name);
+        if candidate.components().count() == 1 && !candidate.is_absolute() {
+            let path = folder.join(&name);
+            if path.is_file() {
+                return Ok(path);
+            }
         }
     }
     let mut candidates: Vec<PathBuf> = std::fs::read_dir(folder)
@@ -148,13 +197,19 @@ fn resolve_audio_path(folder: &Path) -> Result<PathBuf, String> {
         .ok_or_else(|| "录音目录里没有音频文件".to_string())
 }
 
-/// 事务内写入标签；取消时整批放弃。
+/// 事务内写入标签；取消时整批放弃。重跑先清空该会议旧标签，避免编号重排后张冠李戴。
 pub async fn write_assignments(
     pool: &SqlitePool,
+    meeting_id: &str,
     rows: &[(String, Option<f64>, Option<f64>)],
     assignments: &[Option<usize>],
 ) -> Result<usize, String> {
     let mut tx = pool.begin().await.map_err(|e| format!("开启事务失败：{e}"))?;
+    sqlx::query("UPDATE transcripts SET speaker = NULL WHERE meeting_id = ?")
+        .bind(meeting_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| format!("清除旧说话人失败：{e}"))?;
     let mut labels = std::collections::BTreeSet::new();
     for ((id, _, _), assignment) in rows.iter().zip(assignments.iter()) {
         let Some(index) = assignment else { continue };
@@ -232,10 +287,13 @@ pub async fn run_for_meeting<R: Runtime>(
 
     let times: Vec<(Option<f64>, Option<f64>)> = rows.iter().map(|(_, s, e)| (*s, *e)).collect();
     let assignments = assign_speakers(&times, &segments);
-    let labels = write_assignments(&pool, &rows, &assignments).await?;
+    let labels = write_assignments(&pool, &meeting_id, &rows, &assignments).await?;
 
     progress("done", 100);
-    let _ = app.emit("speakers-updated", serde_json::json!({ "meetingId": meeting_id }));
+    let _ = app.emit(
+        "speakers-updated",
+        serde_json::json!({ "meetingId": meeting_id, "labels": labels }),
+    );
     Ok(DiarizationOutcome { labels })
 }
 
@@ -245,18 +303,27 @@ mod tests {
 
     async fn test_pool() -> SqlitePool {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::query("CREATE TABLE transcripts (id TEXT PRIMARY KEY, speaker TEXT)")
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "CREATE TABLE transcripts (id TEXT PRIMARY KEY, meeting_id TEXT NOT NULL, speaker TEXT)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         for id in ["t1", "t2", "t3"] {
-            sqlx::query("INSERT INTO transcripts (id) VALUES (?)")
+            sqlx::query("INSERT INTO transcripts (id, meeting_id) VALUES (?, 'm1')")
                 .bind(id)
                 .execute(&pool)
                 .await
                 .unwrap();
         }
         pool
+    }
+
+    async fn speakers(pool: &SqlitePool) -> Vec<Option<String>> {
+        sqlx::query_scalar::<_, Option<String>>("SELECT speaker FROM transcripts ORDER BY id")
+            .fetch_all(pool)
+            .await
+            .unwrap()
     }
 
     #[test]
@@ -278,23 +345,61 @@ mod tests {
             ("t2".to_string(), Some(1.0), Some(2.0)),
             ("t3".to_string(), Some(2.0), Some(3.0)),
         ];
-        let labels = write_assignments(&pool, &rows, &[Some(0), Some(1), None])
+        let labels = write_assignments(&pool, "m1", &rows, &[Some(0), Some(1), None])
             .await
             .unwrap();
         assert_eq!(labels, 2);
 
-        let speakers: Vec<Option<String>> =
-            sqlx::query_scalar::<_, Option<String>>("SELECT speaker FROM transcripts ORDER BY id")
-                .fetch_all(&pool)
-                .await
-                .unwrap();
         assert_eq!(
-            speakers,
+            speakers(&pool).await,
             vec![
                 Some("SPEAKER_00".to_string()),
                 Some("SPEAKER_01".to_string()),
                 None,
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn rerun_clears_previous_labels() {
+        let pool = test_pool().await;
+        let rows = vec![
+            ("t1".to_string(), Some(0.0), Some(1.0)),
+            ("t2".to_string(), Some(1.0), Some(2.0)),
+            ("t3".to_string(), Some(2.0), Some(3.0)),
+        ];
+        write_assignments(&pool, "m1", &rows, &[Some(0), Some(1), Some(0)])
+            .await
+            .unwrap();
+
+        // 第二轮未对齐的行不能保留上一轮标签：编号会按首次出现重排
+        let labels = write_assignments(&pool, "m1", &rows, &[Some(1), None, None])
+            .await
+            .unwrap();
+        assert_eq!(labels, 1);
+        assert_eq!(
+            speakers(&pool).await,
+            vec![Some("SPEAKER_01".to_string()), None, None]
+        );
+    }
+
+    #[test]
+    fn ignores_audio_file_outside_folder() {
+        let base = std::env::temp_dir().join(format!("diarization-resolve-{}", std::process::id()));
+        let folder = base.join("meeting");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(
+            folder.join("metadata.json"),
+            r#"{"audio_file":"../escape.wav"}"#,
+        )
+        .unwrap();
+        std::fs::write(base.join("escape.wav"), b"x").unwrap();
+        std::fs::write(folder.join("real.wav"), b"x").unwrap();
+
+        let resolved = resolve_audio_path(&folder).unwrap();
+        assert_eq!(resolved.file_name().unwrap(), "real.wav");
+
+        std::fs::remove_dir_all(&base).unwrap();
     }
 }
