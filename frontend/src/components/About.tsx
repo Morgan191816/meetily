@@ -4,7 +4,7 @@ import Image from 'next/image';
 
 
 export function About() {
-    const [currentVersion, setCurrentVersion] = useState<string>('0.5.0');
+    const [currentVersion, setCurrentVersion] = useState<string>('');
 
     useEffect(() => {
         // Get current version on mount

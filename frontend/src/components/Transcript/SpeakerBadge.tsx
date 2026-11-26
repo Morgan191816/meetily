@@ -12,8 +12,8 @@ const PALETTE = [
 ];
 
 function colorFor(label: string): string {
-  const index = Number(label.replace('SPEAKER_', '')) || 0;
-  return PALETTE[index % PALETTE.length];
+  const index = Number(label.replace('SPEAKER_', ''));
+  return PALETTE[Number.isFinite(index) && index >= 0 ? index % PALETTE.length : 0];
 }
 
 export function speakerText(label: string, displayName?: string | null): string {

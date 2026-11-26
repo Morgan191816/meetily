@@ -49,6 +49,16 @@ describe('SpeakerBadge', () => {
     expect(className).not.toContain('undefined');
   });
 
+  test('非数字标签回退到第一项配色', async () => {
+    await act(async () => {
+      renderer = create(<SpeakerBadge label="未知" />);
+    });
+
+    const className = (renderer!.toJSON() as any).props.className as string;
+    expect(className).toContain('bg-blue-100');
+    expect(className).not.toContain('undefined');
+  });
+
   test('可点击时触发回调并显示手型光标', async () => {
     let clicked = 0;
     await act(async () => {

@@ -8,7 +8,7 @@ import { RenameSpeakerDialog } from '@/components/Transcript/RenameSpeakerDialog
 import { Button } from '@/components/ui/button';
 import { TranscriptButtonGroup } from './TranscriptButtonGroup';
 import { invoke } from '@tauri-apps/api/core';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDiarization } from '@/hooks/useDiarization';
 
 interface TranscriptPanelProps {
@@ -70,7 +70,7 @@ export function TranscriptPanel({
     }));
   }, [transcripts, usePagination, segments]);
 
-  const [speakerNames, setSpeakerNames] = useState<Record<string, string>>({});
+  const [speakerRows, setSpeakerRows] = useState<{ label: string; displayName: string | null }[]>([]);
   const [speakerFilter, setSpeakerFilter] = useState<string>('all');
   const [renameTarget, setRenameTarget] = useState<{ label: string; current: string } | null>(null);
   const diarization = useDiarization(meetingId ?? '');
@@ -81,28 +81,45 @@ export function TranscriptPanel({
     void checkAvailability();
   }, [checkAvailability]);
 
-  // refreshKey 递增：分离完成或重命名后标签已写库，重拉显示名与逐字稿
+  // 标签来自数据库而不是已加载页：分页会议的后段说话人也要出现在下拉里
   useEffect(() => {
     if (!meetingId) return;
     let cancelled = false;
     invoke<{ label: string; displayName: string | null }[]>('api_get_meeting_speakers', { meetingId })
       .then((rows) => {
-        if (cancelled) return;
-        const map: Record<string, string> = {};
-        rows.forEach((row) => { if (row.displayName) map[row.label] = row.displayName; });
-        setSpeakerNames(map);
+        if (!cancelled) setSpeakerRows(rows);
       })
       .catch((error) => console.error('加载说话人失败:', error));
-    if (diarization.refreshKey > 0) {
-      onRefetchTranscripts?.().catch((error) => console.error('刷新逐字稿失败:', error));
-    }
     return () => { cancelled = true; };
-  }, [meetingId, diarization.refreshKey]);
+  }, [meetingId, diarization.nameKey, diarization.labelKey]);
 
-  const speakerLabels = useMemo(
-    () => Array.from(new Set(convertedSegments.map((s) => s.speaker).filter(Boolean) as string[])).sort(),
-    [convertedSegments],
-  );
+  // 标签已写库：重拉逐字稿；仅重命名只走上面的显示名刷新，不重置分页
+  useEffect(() => {
+    if (diarization.labelKey === 0) return;
+    onRefetchTranscripts?.().catch((error) => console.error('刷新逐字稿失败:', error));
+  }, [diarization.labelKey]);
+
+  // 事件丢失兜底：库里有标签而当前页没有时补拉一次
+  const autoRefetchedRef = useRef(false);
+  useEffect(() => {
+    autoRefetchedRef.current = false;
+    setSpeakerRows([]);
+  }, [meetingId]);
+  useEffect(() => {
+    if (!meetingId || autoRefetchedRef.current) return;
+    if (speakerRows.length === 0 || convertedSegments.length === 0) return;
+    if (convertedSegments.some((segment) => segment.speaker)) return;
+    autoRefetchedRef.current = true;
+    onRefetchTranscripts?.().catch((error) => console.error('刷新逐字稿失败:', error));
+  }, [meetingId, speakerRows, convertedSegments]);
+
+  const speakerNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    speakerRows.forEach((row) => { if (row.displayName) map[row.label] = row.displayName; });
+    return map;
+  }, [speakerRows]);
+
+  const speakerLabels = useMemo(() => speakerRows.map((row) => row.label), [speakerRows]);
   const hasSpeakers = speakerLabels.length > 0;
   // 重新转写后标签可能变化：失效的筛选回落为「全部」，避免下拉显示全部而列表为空
   const activeFilter = speakerLabels.includes(speakerFilter) ? speakerFilter : 'all';
@@ -139,7 +156,18 @@ export function TranscriptPanel({
             </Button>
           </>
         )}
-        {diarization.unavailable && (
+        {diarization.status === 'idle' && meetingId && convertedSegments.length > 0 && (
+          <Button variant="outline" size="sm" onClick={() => void diarization.rerun()}>
+            重新分离
+          </Button>
+        )}
+        {diarization.error && (
+          <span className="text-xs text-red-600">说话人分离失败：{diarization.error}</span>
+        )}
+        {diarization.empty && !diarization.error && (
+          <span className="text-sm text-gray-600">未识别到多位说话人</span>
+        )}
+        {diarization.unavailable && !hasSpeakers && (
           <span className="text-sm text-amber-700">未安装说话人模型，无法区分说话人（可在设置中下载）</span>
         )}
         {hasSpeakers && (
@@ -184,7 +212,7 @@ export function TranscriptPanel({
           label={renameTarget.label}
           current={renameTarget.current}
           onClose={() => setRenameTarget(null)}
-          onSaved={() => diarization.bump()}
+          onSaved={() => diarization.bumpNames()}
         />
       )}
 

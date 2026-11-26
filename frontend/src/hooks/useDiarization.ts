@@ -10,8 +10,14 @@ interface DiarizationProgressEvent {
   percent: number;
 }
 
+interface DiarizationErrorEvent {
+  meetingId: string;
+  error: string;
+}
+
 interface MeetingEvent {
   meetingId: string;
+  labels?: number;
 }
 
 /** 主动查询结果只在空闲时生效，避免覆盖正在进行的分离。 */
@@ -19,18 +25,31 @@ export function availabilityAfterCheck(state: string, current: DiarizationStatus
   return state === 'missing' && current === 'idle' ? 'unavailable' : current;
 }
 
+/** 失败必须把状态从 processing 复位，否则进度条永久停在半路。 */
+export function failureAfterRun(error: string): {
+  status: DiarizationStatus;
+  progress: number;
+  error: string;
+} {
+  return { status: 'idle', progress: 0, error };
+}
+
 /**
- * 说话人分离状态：进度与结果由后端事件驱动；`refreshKey` 递增表示标签已写库，
- * 逐字稿面板据此重拉说话人名与逐字稿。
+ * 说话人分离状态：进度与结果由后端事件驱动。
+ * `nameKey` 递增表示只需重拉显示名，`labelKey` 递增表示标签已写库、逐字稿需重拉。
  */
 export function useDiarization(meetingId: string) {
   const [status, setStatus] = useState<DiarizationStatus>('idle');
   const [progress, setProgress] = useState(0);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [empty, setEmpty] = useState(false);
+  const [nameKey, setNameKey] = useState(0);
+  const [labelKey, setLabelKey] = useState(0);
   // 取消后仍可能收到已排队的进度事件；新一轮从 decoding 开始，用它复位
   const cancelledRef = useRef(false);
 
-  const bump = useCallback(() => setRefreshKey((key) => key + 1), []);
+  const bumpNames = useCallback(() => setNameKey((key) => key + 1), []);
+  const bumpLabels = useCallback(() => setLabelKey((key) => key + 1), []);
 
   useEffect(() => {
     if (!meetingId) return;
@@ -40,7 +59,11 @@ export function useDiarization(meetingId: string) {
     const attach = async () => {
       const unlistenProgress = await listen<DiarizationProgressEvent>('diarization-progress', (event) => {
         if (event.payload.meetingId !== meetingId) return;
-        if (event.payload.stage === 'decoding') cancelledRef.current = false;
+        if (event.payload.stage === 'decoding') {
+          cancelledRef.current = false;
+          setError(null);
+          setEmpty(false);
+        }
         if (cancelledRef.current) return;
         setStatus('processing');
         setProgress(event.payload.percent);
@@ -54,9 +77,11 @@ export function useDiarization(meetingId: string) {
       const unlistenUpdated = await listen<MeetingEvent>('speakers-updated', (event) => {
         if (event.payload.meetingId !== meetingId) return;
         cancelledRef.current = false;
+        setError(null);
+        setEmpty((event.payload.labels ?? 1) === 0);
         setStatus('done');
         setProgress(100);
-        bump();
+        bumpLabels();
       });
       if (disposed) {
         unlistenUpdated();
@@ -75,6 +100,21 @@ export function useDiarization(meetingId: string) {
         return;
       }
       unlisteners.push(unlistenUnavailable);
+
+      const unlistenError = await listen<DiarizationErrorEvent>('diarization-error', (event) => {
+        if (event.payload.meetingId !== meetingId) return;
+        cancelledRef.current = false;
+        const failure = failureAfterRun(event.payload.error);
+        setStatus(failure.status);
+        setProgress(failure.progress);
+        setError(failure.error);
+      });
+      if (disposed) {
+        unlistenError();
+        unlisteners.forEach((unlisten) => unlisten());
+        return;
+      }
+      unlisteners.push(unlistenError);
     };
 
     attach().catch((error) => console.error('注册说话人事件失败:', error));
@@ -83,7 +123,7 @@ export function useDiarization(meetingId: string) {
       disposed = true;
       unlisteners.forEach((unlisten) => unlisten());
     };
-  }, [meetingId, bump]);
+  }, [meetingId, bumpLabels]);
 
   // 页面加载时主动查询，弥补导入时事件早于监听器挂载的丢失
   const checkAvailability = useCallback(async () => {
@@ -108,5 +148,36 @@ export function useDiarization(meetingId: string) {
     setProgress(0);
   }, [meetingId]);
 
-  return { status, progress, unavailable: status === 'unavailable', refreshKey, bump, cancel, checkAvailability };
+  // 手动重新分离：进度事件驱动状态，失败由命令返回值兜底
+  const rerun = useCallback(async () => {
+    if (!meetingId) return;
+    cancelledRef.current = false;
+    setStatus('processing');
+    setProgress(0);
+    setError(null);
+    setEmpty(false);
+    try {
+      await invoke<number>('api_run_diarization', { meetingId });
+    } catch (raw) {
+      const failure = failureAfterRun(String(raw));
+      setStatus(failure.status);
+      setProgress(failure.progress);
+      setError(failure.error);
+    }
+  }, [meetingId]);
+
+  return {
+    status,
+    progress,
+    unavailable: status === 'unavailable',
+    error,
+    empty,
+    nameKey,
+    labelKey,
+    bumpNames,
+    bumpLabels,
+    rerun,
+    cancel,
+    checkAvailability,
+  };
 }
