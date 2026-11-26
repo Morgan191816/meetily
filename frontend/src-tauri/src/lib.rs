@@ -837,6 +837,8 @@ pub fn run() {
             audio::diarization::commands::diarization_download_models,
             audio::diarization::commands::diarization_cancel_download,
             audio::diarization::commands::diarization_delete_models,
+            audio::diarization::commands::api_run_diarization,
+            audio::diarization::commands::api_cancel_diarization,
             openrouter::get_openrouter_models,
             audio::recording_preferences::get_recording_preferences,
             audio::recording_preferences::set_recording_preferences,

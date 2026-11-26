@@ -4,12 +4,14 @@ use super::model::{
     base_url, inspect_models, model_dir, DiarizationModelStatus, EMBEDDING_FILE,
     EMBEDDING_SHA256, EMBEDDING_SIZE, SEGMENTATION_FILE, SEGMENTATION_SHA256, SEGMENTATION_SIZE,
 };
+use super::runner::run_for_meeting;
 use super::store::{list_speakers, set_display_name, SpeakerRow};
 use crate::audio::transcription::sensevoice::model::{cleanup_partials, download_file};
 use crate::state::AppState;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use tauri::{command, AppHandle, Emitter, Manager, Runtime};
 use tokio_util::sync::CancellationToken;
 
@@ -184,6 +186,47 @@ pub async fn diarization_delete_models<R: Runtime>(app: AppHandle<R>) -> Result<
     }
     cleanup_partials(&dir);
     Ok(())
+}
+
+/// 在途分离任务，`api_cancel_diarization` 按 meeting_id 取消。
+static ACTIVE_RUNS: LazyLock<Mutex<HashMap<String, CancellationToken>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+#[command]
+pub async fn api_run_diarization<R: Runtime>(
+    app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    meeting_id: String,
+) -> Result<usize, String> {
+    let token = CancellationToken::new();
+    {
+        let mut runs = ACTIVE_RUNS.lock().unwrap();
+        if runs.contains_key(&meeting_id) {
+            return Err("该会议正在区分说话人".to_string());
+        }
+        runs.insert(meeting_id.clone(), token.clone());
+    }
+    let result = run_for_meeting(
+        app.clone(),
+        state.db_manager.pool().clone(),
+        meeting_id.clone(),
+        token.clone(),
+    )
+    .await;
+    ACTIVE_RUNS.lock().unwrap().remove(&meeting_id);
+    result.map(|outcome| outcome.labels)
+}
+
+#[command]
+pub async fn api_cancel_diarization(meeting_id: String) -> Result<bool, String> {
+    let token = ACTIVE_RUNS.lock().unwrap().get(&meeting_id).cloned();
+    match token {
+        Some(token) => {
+            token.cancel();
+            Ok(true)
+        }
+        None => Ok(false),
+    }
 }
 
 #[cfg(test)]

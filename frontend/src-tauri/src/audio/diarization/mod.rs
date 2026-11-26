@@ -3,4 +3,5 @@
 pub mod align;
 pub mod commands;
 pub mod model;
+pub mod runner;
 pub mod store;
