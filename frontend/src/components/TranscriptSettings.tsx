@@ -8,6 +8,7 @@ import { Eye, EyeOff, Lock, Unlock } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModelManager } from './WhisperModelManager';
 import { SenseVoiceModelCard } from './SenseVoiceModelCard';
+import { DiarizationModelCard } from './DiarizationModelCard';
 import { DEFAULT_SENSEVOICE_MODEL, DEFAULT_WHISPER_MODEL } from '../constants/modelDefaults';
 
 
@@ -183,6 +184,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                     {uiProvider === 'senseVoice' && (
                         <div className="mt-6">
                             <SenseVoiceModelCard />
+                            <DiarizationModelCard className="mt-4" />
                         </div>
                     )}
 
