@@ -70,6 +70,7 @@ pub fn spawn_auto_diarization<R: Runtime>(app: AppHandle<R>, pool: SqlitePool, m
         .map(|data| inspect_models(&model_dir(&data)).state == "available")
         .unwrap_or(false);
     if !ready {
+        log::info!("说话人模型未安装，跳过自动分离：meeting_id={meeting_id}");
         let _ = app.emit(
             "diarization-unavailable",
             serde_json::json!({ "meetingId": meeting_id }),
@@ -77,8 +78,9 @@ pub fn spawn_auto_diarization<R: Runtime>(app: AppHandle<R>, pool: SqlitePool, m
         return;
     }
     tauri::async_runtime::spawn(async move {
+        let id = meeting_id.clone();
         if let Err(error) = run_guarded(app, pool, meeting_id).await {
-            log::warn!("自动说话人分离失败：{error}");
+            log::warn!("自动说话人分离失败：meeting_id={id}, error={error}");
         }
     });
 }
