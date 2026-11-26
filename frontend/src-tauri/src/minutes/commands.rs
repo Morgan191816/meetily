@@ -330,14 +330,34 @@ fn validate_export_id(meeting_id: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// 逐字稿按录音顺序拼接为 `[MM:SS] {text}`；空则视为不可生成。
+/// 一行逐字稿：`[MM:SS] 姓名：内容`，无显示名时用 `说话人 N`，无 speaker 时只有内容。
+fn compose_line(stamp: &str, speaker: Option<(&str, Option<&str>)>, text: &str) -> String {
+    let speaker = match speaker {
+        Some((_, Some(name))) if !name.trim().is_empty() => format!("{}：", name.trim()),
+        Some((label, _)) if !label.trim().is_empty() => {
+            let index = label
+                .trim()
+                .strip_prefix("SPEAKER_")
+                .and_then(|n| n.parse::<usize>().ok())
+                .unwrap_or(0);
+            format!("说话人 {}：", index + 1)
+        }
+        _ => String::new(),
+    };
+    format!("{stamp} {speaker}{text}")
+}
+
+/// 逐字稿按录音顺序拼接；空则视为不可生成。
 ///
 /// 格式对齐旧摘要管线（已删除）的 `buildSummaryTranscriptPayload`：
 /// 秒数取 `audio_start_time` 向下取整，缺失时退回 `timestamp` 列。
 async fn load_transcript_text(pool: &SqlitePool, meeting_id: &str) -> Result<String, String> {
-    let segments = sqlx::query_as::<_, (String, Option<f64>, String)>(
-        "SELECT transcript, audio_start_time, timestamp FROM transcripts WHERE meeting_id = ?
-         ORDER BY COALESCE(audio_start_time, 0) ASC, rowid ASC",
+    let segments = sqlx::query_as::<_, (String, Option<f64>, String, Option<String>, Option<String>)>(
+        "SELECT t.transcript, t.audio_start_time, t.timestamp, t.speaker, s.display_name
+         FROM transcripts t
+         LEFT JOIN meeting_speakers s ON s.meeting_id = t.meeting_id AND s.label = t.speaker
+         WHERE t.meeting_id = ?
+         ORDER BY COALESCE(t.audio_start_time, 0) ASC, t.rowid ASC",
     )
     .bind(meeting_id)
     .fetch_all(pool)
@@ -346,7 +366,7 @@ async fn load_transcript_text(pool: &SqlitePool, meeting_id: &str) -> Result<Str
 
     let text = segments
         .into_iter()
-        .filter_map(|(segment, start, timestamp)| {
+        .filter_map(|(segment, start, timestamp, speaker, display_name)| {
             let segment = segment.trim();
             if segment.is_empty() {
                 return None;
@@ -358,7 +378,10 @@ async fn load_transcript_text(pool: &SqlitePool, meeting_id: &str) -> Result<Str
                 }
                 None => timestamp,
             };
-            Some(format!("{stamp} {segment}"))
+            let speaker = speaker
+                .as_deref()
+                .map(|label| (label, display_name.as_deref()));
+            Some(compose_line(&stamp, speaker, segment))
         })
         .collect::<Vec<_>>()
         .join("\n");
@@ -418,6 +441,38 @@ fn clear_cancellation(meeting_id: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compose_line_attributes_speaker() {
+        assert_eq!(
+            compose_line("[01:05]", Some(("SPEAKER_00", Some("曹磊"))), "确认预算"),
+            "[01:05] 曹磊：确认预算"
+        );
+        assert_eq!(
+            compose_line("[01:05]", Some(("SPEAKER_01", None)), "确认预算"),
+            "[01:05] 说话人 2：确认预算"
+        );
+        assert_eq!(
+            compose_line("[01:05]", None, "确认预算"),
+            "[01:05] 确认预算"
+        );
+    }
+
+    #[test]
+    fn compose_line_treats_blank_speaker_as_absent() {
+        assert_eq!(
+            compose_line("[01:05]", Some(("SPEAKER_00", Some("  "))), "确认预算"),
+            "[01:05] 说话人 1：确认预算"
+        );
+        assert_eq!(
+            compose_line("[01:05]", Some(("", None)), "确认预算"),
+            "[01:05] 确认预算"
+        );
+        assert_eq!(
+            compose_line("[01:05]", Some(("   ", Some(""))), "确认预算"),
+            "[01:05] 确认预算"
+        );
+    }
 
     #[test]
     fn rejects_unsafe_export_ids() {
