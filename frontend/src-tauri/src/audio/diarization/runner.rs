@@ -124,11 +124,12 @@ pub async fn run_for_meeting<R: Runtime>(
         return Err("已取消".to_string());
     }
     progress("decoding", 5);
-    let decoded = tokio::task::spawn_blocking(move || decode_audio_file(&audio_path))
-        .await
-        .map_err(|e| format!("解码任务失败：{e}"))?
-        .map_err(|e| format!("解码音频失败：{e}"))?;
-    let samples = decoded.to_whisper_format();
+    let samples = tokio::task::spawn_blocking(move || {
+        decode_audio_file(&audio_path).map(|decoded| decoded.to_whisper_format())
+    })
+    .await
+    .map_err(|e| format!("解码任务失败：{e}"))?
+    .map_err(|e| format!("解码音频失败：{e}"))?;
 
     if cancel.is_cancelled() {
         return Err("已取消".to_string());
