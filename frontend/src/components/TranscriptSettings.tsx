@@ -184,9 +184,12 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                     {uiProvider === 'senseVoice' && (
                         <div className="mt-6">
                             <SenseVoiceModelCard />
-                            <DiarizationModelCard className="mt-4" />
                         </div>
                     )}
+
+                    <div className="mt-6">
+                        <DiarizationModelCard />
+                    </div>
 
                     {requiresApiKey && (
                         <div>
