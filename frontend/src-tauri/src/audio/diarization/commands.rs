@@ -59,6 +59,15 @@ fn active_progress() -> Option<u8> {
         .map(|d| d.progress.load(Ordering::Relaxed))
 }
 
+/// 两个文件合并为一条进度：segmentation 占 0–40%，embedding 占 40–100%。
+fn overall_progress(file_index: u8, percent: u8) -> u8 {
+    let percent = percent.min(100) as u16;
+    match file_index {
+        0 => (percent * 40 / 100) as u8,
+        _ => (40 + percent * 60 / 100) as u8,
+    }
+}
+
 #[command]
 pub async fn diarization_get_status<R: Runtime>(
     app: AppHandle<R>,
@@ -105,7 +114,7 @@ pub async fn diarization_download_models<R: Runtime>(app: AppHandle<R>) -> Resul
             SEGMENTATION_SIZE,
             SEGMENTATION_SHA256,
             &token,
-            |p| report(p * 40 / 100),
+            |p| report(overall_progress(0, p)),
         )
         .await?;
         download_file(
@@ -114,25 +123,38 @@ pub async fn diarization_download_models<R: Runtime>(app: AppHandle<R>) -> Resul
             EMBEDDING_SIZE,
             EMBEDDING_SHA256,
             &token,
-            |p| report(40 + p * 60 / 100),
+            |p| report(overall_progress(1, p)),
         )
         .await
     }
     .await;
 
-    *ACTIVE.lock().unwrap() = None;
+    // 删除后可能已开始新一轮下载：只有槽位仍属于本任务时才收尾
+    let mut active = ACTIVE.lock().unwrap();
+    let still_owner = active
+        .as_ref()
+        .is_some_and(|current| Arc::ptr_eq(&current.progress, &progress));
+    if still_owner {
+        *active = None;
+    }
+    drop(active);
+
     match result {
         Ok(()) => {
             let _ = app.emit("diarization-download-complete", serde_json::json!({}));
             Ok(())
         }
         Err(_) if token.is_cancelled() => {
-            cleanup_partials(&dir);
+            if still_owner {
+                cleanup_partials(&dir);
+            }
             Ok(())
         }
         Err(error) => {
-            cleanup_partials(&dir);
-            let _ = app.emit("diarization-download-error", serde_json::json!({ "error": error }));
+            if still_owner {
+                cleanup_partials(&dir);
+                let _ = app.emit("diarization-download-error", serde_json::json!({ "error": error }));
+            }
             Err(error)
         }
     }
@@ -162,4 +184,19 @@ pub async fn diarization_delete_models<R: Runtime>(app: AppHandle<R>) -> Result<
     }
     cleanup_partials(&dir);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::overall_progress;
+
+    #[test]
+    fn progress_splits_between_files_and_clamps() {
+        assert_eq!(overall_progress(0, 0), 0);
+        assert_eq!(overall_progress(0, 100), 40);
+        assert_eq!(overall_progress(1, 0), 40);
+        assert_eq!(overall_progress(1, 100), 100);
+        assert_eq!(overall_progress(1, 50), 70);
+        assert_eq!(overall_progress(0, 200), 40);
+    }
 }
