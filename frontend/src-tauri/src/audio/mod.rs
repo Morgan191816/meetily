@@ -37,6 +37,9 @@ pub mod playback_monitor; // NEW: Playback device detection for BT warnings
 // Transcription module (provider abstraction, engine management, worker pool)
 pub mod transcription;
 
+// 说话人分离（模型管理、时间对齐、运行器与命令）
+pub mod diarization;
+
 // Shared utilities for import and retranscription
 pub(crate) mod common;
 
