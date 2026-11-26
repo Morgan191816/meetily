@@ -33,6 +33,7 @@ export function SpeakerBadge({
     <button
       type="button"
       onClick={onClick}
+      title={onClick ? '重命名说话人' : undefined}
       className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-medium ${colorFor(label)} ${onClick ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
     >
       {speakerText(label, displayName)}

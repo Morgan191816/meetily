@@ -22,6 +22,7 @@ export function RenameSpeakerDialog({
   const [name, setName] = useState(current);
   const [roster, setRoster] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     invoke<string[]>('api_get_roster_names').then(setRoster).catch(() => setRoster([]));
@@ -29,12 +30,14 @@ export function RenameSpeakerDialog({
 
   const save = async () => {
     setSaving(true);
+    setError(null);
     try {
       await invoke('api_rename_speaker', { meetingId, label, name });
       onSaved();
       onClose();
-    } catch (error) {
-      console.error('保存说话人名称失败:', error);
+    } catch (cause) {
+      console.error('保存说话人名称失败:', cause);
+      setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setSaving(false);
     }
@@ -49,9 +52,11 @@ export function RenameSpeakerDialog({
         <Input
           value={name}
           list="roster-names"
+          aria-label="说话人姓名"
           placeholder="输入姓名，留空则恢复默认"
           onChange={(event) => setName(event.target.value)}
         />
+        {error && <p className="text-sm text-red-600">{`保存失败：${error}`}</p>}
         <datalist id="roster-names">
           {roster.map((person) => <option key={person} value={person} />)}
         </datalist>
