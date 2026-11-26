@@ -12,6 +12,7 @@ import { TranscriptModelProps } from '@/components/TranscriptSettings';
 import { DEFAULT_WHISPER_MODEL } from '@/constants/modelDefaults';
 import Analytics from '@/lib/analytics';
 import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
@@ -78,6 +79,11 @@ const Sidebar: React.FC = () => {
     model: DEFAULT_WHISPER_MODEL,
   });
   const [settingsSaveSuccess, setSettingsSaveSuccess] = useState<boolean | null>(null);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => setAppVersion(null));
+  }, []);
 
   // State for edit modal
   const [editModalState, setEditModalState] = useState<{ isOpen: boolean; meetingId: string | null; currentTitle: string }>({
@@ -807,7 +813,7 @@ const Sidebar: React.FC = () => {
               <span>设置</span>
             </button>
             <div className="w-full flex items-center justify-center px-3 py-1 text-xs text-gray-400">
-              Morgan Meet v0.5.0
+              {`Morgan Meet${appVersion ? ` v${appVersion}` : ''}`}
             </div>
           </div>
         )}

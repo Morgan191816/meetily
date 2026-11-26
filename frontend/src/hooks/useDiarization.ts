@@ -14,6 +14,11 @@ interface MeetingEvent {
   meetingId: string;
 }
 
+/** 主动查询结果只在空闲时生效，避免覆盖正在进行的分离。 */
+export function availabilityAfterCheck(state: string, current: DiarizationStatus): DiarizationStatus {
+  return state === 'missing' && current === 'idle' ? 'unavailable' : current;
+}
+
 /**
  * 说话人分离状态：进度与结果由后端事件驱动；`refreshKey` 递增表示标签已写库，
  * 逐字稿面板据此重拉说话人名与逐字稿。
@@ -80,6 +85,17 @@ export function useDiarization(meetingId: string) {
     };
   }, [meetingId, bump]);
 
+  // 页面加载时主动查询，弥补导入时事件早于监听器挂载的丢失
+  const checkAvailability = useCallback(async () => {
+    if (!meetingId) return;
+    try {
+      const status = await invoke<{ state: string }>('diarization_get_status');
+      setStatus((prev) => availabilityAfterCheck(status.state, prev));
+    } catch (error) {
+      console.error('查询说话人模型状态失败:', error);
+    }
+  }, [meetingId]);
+
   const cancel = useCallback(async () => {
     cancelledRef.current = true;
     try {
@@ -92,5 +108,5 @@ export function useDiarization(meetingId: string) {
     setProgress(0);
   }, [meetingId]);
 
-  return { status, progress, unavailable: status === 'unavailable', refreshKey, bump, cancel };
+  return { status, progress, unavailable: status === 'unavailable', refreshKey, bump, cancel, checkAvailability };
 }

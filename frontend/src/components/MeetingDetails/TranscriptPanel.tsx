@@ -74,6 +74,12 @@ export function TranscriptPanel({
   const [speakerFilter, setSpeakerFilter] = useState<string>('all');
   const [renameTarget, setRenameTarget] = useState<{ label: string; current: string } | null>(null);
   const diarization = useDiarization(meetingId ?? '');
+  const { checkAvailability } = diarization;
+
+  // 导入时后端事件可能早于本组件挂载，挂载后主动查一次模型状态
+  useEffect(() => {
+    void checkAvailability();
+  }, [checkAvailability]);
 
   // refreshKey 递增：分离完成或重命名后标签已写库，重拉显示名与逐字稿
   useEffect(() => {
