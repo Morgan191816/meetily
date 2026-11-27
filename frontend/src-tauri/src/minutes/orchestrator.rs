@@ -16,6 +16,7 @@ use crate::minutes::llm::{merge_usage, MinutesDraft, TaskItem};
 use crate::minutes::names::extract_attendees;
 use crate::minutes::quality::render_quality_report;
 use crate::minutes::render::{render_minutes, MinutesRenderInput};
+use crate::minutes::templates::{self, MinutesTemplate};
 use crate::minutes::traceability::{verify_claims, ClaimKind, ClaimResult, Verdict};
 use crate::minutes::validate::validate_tasks;
 
@@ -25,6 +26,7 @@ pub trait MinutesLlm: Send + Sync {
     async fn summarize(
         &self,
         corrected_text: &str,
+        template: &MinutesTemplate,
     ) -> Result<(MinutesDraft, Option<(u32, u32)>), String>;
     async fn extract_tasks(
         &self,
@@ -61,6 +63,8 @@ pub struct MinutesInput<'a> {
     pub source: Option<&'a str>,
     /// metadata.json 的 created_at（RFC3339），对应 Python `_fallback_date`。
     pub metadata_created_at: Option<&'a str>,
+    /// 会议类型模板 id；缺省或未知时回退 `templates::DEFAULT_ID`。
+    pub template_id: Option<&'a str>,
     pub cancel: Option<&'a CancellationToken>,
 }
 
@@ -80,6 +84,7 @@ pub async fn run_minutes(
             project: None,
             source: None,
             metadata_created_at: None,
+            template_id: None,
             cancel: None,
         },
         llm,
@@ -108,10 +113,11 @@ pub async fn run_minutes_with_progress(
     let corrected = correct_terms(input.text);
     ensure_not_cancelled(input.cancel)?;
 
-    // 2. step2 总结
+    // 2. step2 总结（模板决定提示词与后续渲染顺序）
+    let template = templates::find(input.template_id.unwrap_or(templates::DEFAULT_ID));
     progress("summarizing", 25);
     let (draft, step2_usage) = llm
-        .summarize(&corrected)
+        .summarize(&corrected, template)
         .await
         .map_err(|error| format!("纪要生成失败：{error}"))?;
     ensure_not_cancelled(input.cancel)?;
@@ -172,19 +178,22 @@ pub async fn run_minutes_with_progress(
         })
         .unwrap_or_else(|| "会议纪要".to_string());
     let meeting_date = resolve_meeting_date(&draft, input.metadata_created_at, input.today);
-    let minutes = render_minutes(&MinutesRenderInput {
-        title: title.clone(),
-        meeting_date: meeting_date.clone(),
-        project: input.project.unwrap_or("会议").to_string(),
-        source: input.source.unwrap_or("逐字稿").to_string(),
-        today: input.today,
-        attendees,
-        unmatched_attendees,
-        draft: &draft,
-        validation: &validation,
-        claims: &claims,
-        traceability_pass,
-    });
+    let minutes = render_minutes(
+        &MinutesRenderInput {
+            title: title.clone(),
+            meeting_date: meeting_date.clone(),
+            project: input.project.unwrap_or("会议").to_string(),
+            source: input.source.unwrap_or("逐字稿").to_string(),
+            today: input.today,
+            attendees,
+            unmatched_attendees,
+            draft: &draft,
+            validation: &validation,
+            claims: &claims,
+            traceability_pass,
+        },
+        template,
+    );
     let quality_markdown = render_quality_report(&claims, &validation, &conflicts, usage);
 
     // 9. Excel 字节
@@ -337,6 +346,7 @@ mod tests {
         async fn summarize(
             &self,
             _corrected_text: &str,
+            _template: &MinutesTemplate,
         ) -> Result<(MinutesDraft, Option<(u32, u32)>), String> {
             Ok((self.draft.clone(), None))
         }
@@ -357,6 +367,7 @@ mod tests {
         async fn summarize(
             &self,
             _corrected_text: &str,
+            _template: &MinutesTemplate,
         ) -> Result<(MinutesDraft, Option<(u32, u32)>), String> {
             Ok((step2_fixture(), Some((10, 20))))
         }
@@ -376,6 +387,7 @@ mod tests {
         async fn summarize(
             &self,
             _corrected_text: &str,
+            _template: &MinutesTemplate,
         ) -> Result<(MinutesDraft, Option<(u32, u32)>), String> {
             Err("模型不可用".to_string())
         }
@@ -445,6 +457,7 @@ mod tests {
                 project: None,
                 source: None,
                 metadata_created_at: None,
+                template_id: None,
                 cancel: None,
             },
             &stub,
@@ -485,6 +498,7 @@ mod tests {
                 project: None,
                 source: None,
                 metadata_created_at: None,
+                template_id: None,
                 cancel: Some(&token),
             },
             &StubLlm::new(step2_fixture(), step3_fixture()),
@@ -550,19 +564,22 @@ mod tests {
 
         // 最终标记：map 后写覆盖 → 两处都是〔推论〕
         let validation = crate::minutes::validate::ValidationOutcome::default();
-        let minutes = render_minutes(&MinutesRenderInput {
-            title: "标题".to_string(),
-            meeting_date: "2026-08-04".to_string(),
-            project: "会议".to_string(),
-            source: "逐字稿".to_string(),
-            today: today(),
-            attendees: Vec::new(),
-            unmatched_attendees: Vec::new(),
-            draft: &draft,
-            validation: &validation,
-            claims: &claims,
-            traceability_pass: true,
-        });
+        let minutes = render_minutes(
+            &MinutesRenderInput {
+                title: "标题".to_string(),
+                meeting_date: "2026-08-04".to_string(),
+                project: "会议".to_string(),
+                source: "逐字稿".to_string(),
+                today: today(),
+                attendees: Vec::new(),
+                unmatched_attendees: Vec::new(),
+                draft: &draft,
+                validation: &validation,
+                claims: &claims,
+                traceability_pass: true,
+            },
+            templates::find(templates::DEFAULT_ID),
+        );
         assert!(
             minutes.markdown.contains("- 决策-01：预算审批〔推论〕"),
             "决策行标记应为〔推论〕\n{}",

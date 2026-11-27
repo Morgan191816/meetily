@@ -9,6 +9,7 @@ use chrono::NaiveDate;
 
 use crate::minutes::dates::parse_date;
 use crate::minutes::llm::MinutesDraft;
+use crate::minutes::templates::{MinutesTemplate, Section};
 use crate::minutes::traceability::{ClaimResult, Confidence, Verdict};
 use crate::minutes::validate::ValidationOutcome;
 
@@ -34,7 +35,10 @@ pub struct MinutesRenderInput<'a> {
     pub traceability_pass: bool,
 }
 
-pub fn render_minutes(input: &MinutesRenderInput<'_>) -> MinutesDocument {
+pub fn render_minutes(
+    input: &MinutesRenderInput<'_>,
+    template: &MinutesTemplate,
+) -> MinutesDocument {
     let draft = input.draft;
     let fixed = &input.validation.fixed_tasks;
     let claim_map = build_claim_map(input.claims);
@@ -68,172 +72,190 @@ pub fn render_minutes(input: &MinutesRenderInput<'_>) -> MinutesDocument {
     }
     lines.push(String::new());
 
-    // ── 3. 会议摘要（给未参会者：目的 → 主要结论 → 未决事项） ──
-    if !draft.overview.is_empty() {
-        lines.push("## 会议摘要".to_string());
-        lines.push(draft.overview.clone());
-        lines.push(String::new());
-    }
+    // ── 3. 按模板章节顺序输出（核心结论随摘要输出，保持结论先行） ──
+    for section in template.sections {
+        match section {
+            Section::Overview => {
+                if !draft.overview.is_empty() {
+                    lines.push("## 会议摘要".to_string());
+                    lines.push(draft.overview.clone());
+                    lines.push(String::new());
+                }
 
-    // ── 4. 核心结论（结论先行，金字塔原理） ──
-    let mut core: Vec<&str> = draft
-        .decisions
-        .iter()
-        .map(|d| d.content.as_str())
-        .filter(|content| !content.is_empty())
-        .take(3)
-        .collect();
-    if core.len() < 3 {
-        for topic in &draft.topics {
-            if !topic.conclusion.is_empty() && !core.contains(&topic.conclusion.as_str()) {
-                core.push(&topic.conclusion);
-            }
-            if core.len() >= 3 {
-                break;
-            }
-        }
-    }
-    if !core.is_empty() {
-        lines.push("## 核心结论".to_string());
-        for content in &core {
-            lines.push(format!("- {content}"));
-        }
-        lines.push(String::new());
-    }
-
-    // ── 5. 会议议题（议题名 + 讨论要点 + 结论 + 分歧点） ──
-    lines.push("## 会议议题".to_string());
-    if !draft.topics.is_empty() {
-        for (offset, topic) in draft.topics.iter().enumerate() {
-            let index = offset + 1;
-            let title = if topic.title.is_empty() {
-                format!("议题 {index}")
-            } else {
-                topic.title.clone()
-            };
-            lines.push(format!("{index}. {title}"));
-            for (label, value) in [
-                ("讨论要点", &topic.discussion),
-                ("结论", &topic.conclusion),
-                ("分歧点", &topic.disagreement),
-            ] {
-                if !value.is_empty() {
-                    lines.push(format!("   - {label}：{value}"));
+                let mut core: Vec<&str> = draft
+                    .decisions
+                    .iter()
+                    .map(|d| d.content.as_str())
+                    .filter(|content| !content.is_empty())
+                    .take(3)
+                    .collect();
+                if core.len() < 3 {
+                    for topic in &draft.topics {
+                        if !topic.conclusion.is_empty()
+                            && !core.contains(&topic.conclusion.as_str())
+                        {
+                            core.push(&topic.conclusion);
+                        }
+                        if core.len() >= 3 {
+                            break;
+                        }
+                    }
+                }
+                if !core.is_empty() {
+                    lines.push("## 核心结论".to_string());
+                    for content in &core {
+                        lines.push(format!("- {content}"));
+                    }
+                    lines.push(String::new());
                 }
             }
-        }
-    } else {
-        lines.push("（未提取到明确议题）".to_string());
-    }
-    lines.push(String::new());
-
-    // ── 6. 模板自定义章节（议题之后、决策之前，按模型返回顺序） ──
-    for section in &draft.custom_sections {
-        lines.push(format!("## {}", section.heading));
-        lines.push(section.markdown.clone());
-        lines.push(String::new());
-    }
-
-    // ── 7. 决策事项（编号 + 内容 + 依据 + 生效时间） ──
-    lines.push("## 决策事项".to_string());
-    if !draft.decisions.is_empty() {
-        for (offset, decision) in draft.decisions.iter().enumerate() {
-            let content = strip_inference_marker(&decision.content);
-            let marker = verdict_marker(claim_map.get(content).copied());
-            let mut detail = Vec::new();
-            if !decision.basis.is_empty() {
-                detail.push(format!("依据：{}", decision.basis));
+            Section::Custom => {
+                // 按模板声明顺序展开；内容缺失的章节直接跳过，不输出空标题
+                for spec in template.custom_sections {
+                    if let Some(custom) = draft
+                        .custom_sections
+                        .iter()
+                        .find(|custom| custom.heading == spec.heading)
+                    {
+                        lines.push(format!("## {}", custom.heading));
+                        lines.push(custom.markdown.clone());
+                        lines.push(String::new());
+                    }
+                }
             }
-            if !decision.effective_date.is_empty() {
-                detail.push(format!("生效：{}", decision.effective_date));
+            Section::Topics => {
+                lines.push("## 会议议题".to_string());
+                if !draft.topics.is_empty() {
+                    for (offset, topic) in draft.topics.iter().enumerate() {
+                        let index = offset + 1;
+                        let title = if topic.title.is_empty() {
+                            format!("议题 {index}")
+                        } else {
+                            topic.title.clone()
+                        };
+                        lines.push(format!("{index}. {title}"));
+                        for (label, value) in [
+                            ("讨论要点", &topic.discussion),
+                            ("结论", &topic.conclusion),
+                            ("分歧点", &topic.disagreement),
+                        ] {
+                            if !value.is_empty() {
+                                lines.push(format!("   - {label}：{value}"));
+                            }
+                        }
+                    }
+                } else {
+                    lines.push("（未提取到明确议题）".to_string());
+                }
+                lines.push(String::new());
             }
-            let suffix = if detail.is_empty() {
-                String::new()
-            } else {
-                format!("（{}）", detail.join("；"))
-            };
-            lines.push(format!(
-                "- 决策-{:02}：{content}{marker}{suffix}",
-                offset + 1
-            ));
-        }
-    } else {
-        lines.push("本次会议无明确决策事项。".to_string());
-    }
-    lines.push(String::new());
-
-    // ── 8. 行动项（含状态列） ──
-    lines.push("## 行动项".to_string());
-    if !fixed.is_empty() {
-        lines.push("| 序号 | 任务名称 | 责任人 | 参与人 | 截止日期 | 状态 |".to_string());
-        lines.push("|------|----------|--------|--------|----------|------|".to_string());
-        for (offset, task) in fixed.iter().enumerate() {
-            let name = strip_inference_marker(&task.task_name);
-            let marker = verdict_marker(claim_map.get(name).copied());
-            lines.push(format!(
-                "| {} | {name}{marker} | {} | {} | {} | 未开始 |",
-                offset + 1,
-                task.owner,
-                task.participants,
-                task.deadline
-            ));
-        }
-    } else {
-        lines.push("本次会议未提取到行动项。".to_string());
-    }
-    lines.push(String::new());
-
-    // ── 9. 风险与阻碍（风险 → 严重度 → 缓解措施 → 负责人） ──
-    lines.push("## 风险与阻碍".to_string());
-    if !draft.risks.is_empty() {
-        for risk in &draft.risks {
-            let description = strip_inference_marker(&risk.description);
-            let marker = verdict_marker(claim_map.get(description).copied());
-            let mut detail = Vec::new();
-            if !risk.severity.is_empty() {
-                detail.push(format!("严重度：{}", risk.severity));
+            Section::Decisions => {
+                lines.push("## 决策事项".to_string());
+                if !draft.decisions.is_empty() {
+                    for (offset, decision) in draft.decisions.iter().enumerate() {
+                        let content = strip_inference_marker(&decision.content);
+                        let marker = verdict_marker(claim_map.get(content).copied());
+                        let mut detail = Vec::new();
+                        if !decision.basis.is_empty() {
+                            detail.push(format!("依据：{}", decision.basis));
+                        }
+                        if !decision.effective_date.is_empty() {
+                            detail.push(format!("生效：{}", decision.effective_date));
+                        }
+                        let suffix = if detail.is_empty() {
+                            String::new()
+                        } else {
+                            format!("（{}）", detail.join("；"))
+                        };
+                        lines.push(format!(
+                            "- 决策-{:02}：{content}{marker}{suffix}",
+                            offset + 1
+                        ));
+                    }
+                } else {
+                    lines.push("本次会议无明确决策事项。".to_string());
+                }
+                lines.push(String::new());
             }
-            if !risk.mitigation.is_empty() {
-                detail.push(format!("缓解：{}", risk.mitigation));
+            Section::Actions => {
+                lines.push("## 行动项".to_string());
+                if !fixed.is_empty() {
+                    lines.push(
+                        "| 序号 | 任务名称 | 责任人 | 参与人 | 截止日期 | 状态 |".to_string(),
+                    );
+                    lines.push(
+                        "|------|----------|--------|--------|----------|------|".to_string(),
+                    );
+                    for (offset, task) in fixed.iter().enumerate() {
+                        let name = strip_inference_marker(&task.task_name);
+                        let marker = verdict_marker(claim_map.get(name).copied());
+                        lines.push(format!(
+                            "| {} | {name}{marker} | {} | {} | {} | 未开始 |",
+                            offset + 1,
+                            task.owner,
+                            task.participants,
+                            task.deadline
+                        ));
+                    }
+                } else {
+                    lines.push("本次会议未提取到行动项。".to_string());
+                }
+                lines.push(String::new());
             }
-            if !risk.owner.is_empty() {
-                detail.push(format!("负责人：{}", risk.owner));
+            Section::Risks => {
+                lines.push("## 风险与阻碍".to_string());
+                if !draft.risks.is_empty() {
+                    for risk in &draft.risks {
+                        let description = strip_inference_marker(&risk.description);
+                        let marker = verdict_marker(claim_map.get(description).copied());
+                        let mut detail = Vec::new();
+                        if !risk.severity.is_empty() {
+                            detail.push(format!("严重度：{}", risk.severity));
+                        }
+                        if !risk.mitigation.is_empty() {
+                            detail.push(format!("缓解：{}", risk.mitigation));
+                        }
+                        if !risk.owner.is_empty() {
+                            detail.push(format!("负责人：{}", risk.owner));
+                        }
+                        let suffix = if detail.is_empty() {
+                            String::new()
+                        } else {
+                            format!("（{}）", detail.join("；"))
+                        };
+                        lines.push(format!("- {description}{marker}{suffix}"));
+                    }
+                } else {
+                    lines.push("无。".to_string());
+                }
+                lines.push(String::new());
             }
-            let suffix = if detail.is_empty() {
-                String::new()
-            } else {
-                format!("（{}）", detail.join("；"))
-            };
-            lines.push(format!("- {description}{marker}{suffix}"));
-        }
-    } else {
-        lines.push("无。".to_string());
-    }
-    lines.push(String::new());
-
-    // ── 10. 待决问题（非空才出） ──
-    if !draft.open_issues.is_empty() {
-        lines.push("## 待决问题".to_string());
-        for issue in &draft.open_issues {
-            lines.push(format!("- {issue}"));
-        }
-        lines.push(String::new());
-    }
-
-    // ── 11. 下次会议 ──
-    if let Some(next) = &draft.next_meeting {
-        if !next.date.is_empty() || !next.agenda.is_empty() {
-            lines.push("## 下次会议".to_string());
-            if !next.date.is_empty() {
-                lines.push(format!(
-                    "- 日期：{}",
-                    normalize_meeting_date(&next.date, input.today)
-                ));
+            Section::OpenIssues => {
+                if !draft.open_issues.is_empty() {
+                    lines.push("## 待决问题".to_string());
+                    for issue in &draft.open_issues {
+                        lines.push(format!("- {issue}"));
+                    }
+                    lines.push(String::new());
+                }
             }
-            if !next.agenda.is_empty() {
-                lines.push(format!("- 议程：{}", next.agenda));
+            Section::NextMeeting => {
+                if let Some(next) = &draft.next_meeting {
+                    if !next.date.is_empty() || !next.agenda.is_empty() {
+                        lines.push("## 下次会议".to_string());
+                        if !next.date.is_empty() {
+                            lines.push(format!(
+                                "- 日期：{}",
+                                normalize_meeting_date(&next.date, input.today)
+                            ));
+                        }
+                        if !next.agenda.is_empty() {
+                            lines.push(format!("- 议程：{}", next.agenda));
+                        }
+                        lines.push(String::new());
+                    }
+                }
             }
-            lines.push(String::new());
         }
     }
 
@@ -389,6 +411,7 @@ fn normalize_meeting_date(text: &str, today: NaiveDate) -> String {
 mod tests {
     use super::*;
     use crate::minutes::llm::{CustomSection, Decision, NextMeeting, Risk, TaskItem, Topic};
+    use crate::minutes::templates::{find, DEFAULT_ID};
     use crate::minutes::traceability::{ClaimKind, ClaimResult};
     use crate::minutes::validate::FixLog;
 
@@ -457,6 +480,14 @@ mod tests {
     }
 
     fn render_with_draft(draft: MinutesDraft, tasks: Vec<TaskItem>) -> MinutesDocument {
+        render_with_template(draft, tasks, find(DEFAULT_ID))
+    }
+
+    fn render_with_template(
+        draft: MinutesDraft,
+        tasks: Vec<TaskItem>,
+        template: &MinutesTemplate,
+    ) -> MinutesDocument {
         let validation = ValidationOutcome {
             fixed_tasks: tasks,
             issues: Vec::new(),
@@ -471,19 +502,22 @@ mod tests {
             claim("华硕不落总灯已经结案", Verdict::Verified),
             claim("跟进冯亚项目进度", Verdict::Unsupported),
         ];
-        render_minutes(&MinutesRenderInput {
-            title: "路灯会议".to_string(),
-            meeting_date: "2026-08-04".to_string(),
-            project: "路灯项目".to_string(),
-            source: "录音.mp3".to_string(),
-            today: today(),
-            attendees: vec!["许日政".to_string(), "杨朋".to_string()],
-            unmatched_attendees: Vec::new(),
-            draft: &draft,
-            validation: &validation,
-            claims: &claims,
-            traceability_pass: false,
-        })
+        render_minutes(
+            &MinutesRenderInput {
+                title: "路灯会议".to_string(),
+                meeting_date: "2026-08-04".to_string(),
+                project: "路灯项目".to_string(),
+                source: "录音.mp3".to_string(),
+                today: today(),
+                attendees: vec!["许日政".to_string(), "杨朋".to_string()],
+                unmatched_attendees: Vec::new(),
+                draft: &draft,
+                validation: &validation,
+                claims: &claims,
+                traceability_pass: false,
+            },
+            template,
+        )
     }
 
     #[test]
@@ -571,7 +605,7 @@ mod tests {
     }
 
     #[test]
-    fn custom_sections_render_in_order_between_topics_and_decisions() {
+    fn custom_sections_render_in_template_order_for_review() {
         let draft = MinutesDraft {
             custom_sections: vec![
                 CustomSection {
@@ -585,18 +619,48 @@ mod tests {
             ],
             ..base_draft()
         };
-        let md = render_with_draft(draft, vec![task()]).markdown;
-        let topics = md.find("## 会议议题").unwrap();
+        let md = render_with_template(draft, vec![task()], find("review")).markdown;
         let first = md
             .find("## 评审对象与材料")
             .expect("应输出第一个自定义章节");
         let second = md.find("## 评审结论").expect("应输出第二个自定义章节");
+        let topics = md.find("## 会议议题").unwrap();
         let decisions = md.find("## 决策事项").unwrap();
         assert!(
-            topics < first && first < second && second < decisions,
-            "自定义章节应按顺序位于议题与决策之间"
+            first < second && second < topics && topics < decisions,
+            "review 模板的自定义章节应位于议题与决策之前，且按声明顺序"
         );
         assert!(md.contains("材料一"));
         assert!(md.contains("有条件通过"));
+    }
+
+    #[test]
+    fn standup_template_orders_custom_sections_and_skips_missing() {
+        // 模型返回顺序与模板声明顺序相反，且缺少「本周进展」
+        let draft = MinutesDraft {
+            custom_sections: vec![
+                CustomSection {
+                    heading: "阻塞与风险".to_string(),
+                    markdown: "等待预算审批".to_string(),
+                },
+                CustomSection {
+                    heading: "上周行动项回顾".to_string(),
+                    markdown: "两项已完成".to_string(),
+                },
+            ],
+            ..base_draft()
+        };
+        let md = render_with_template(draft, vec![task()], find("standup")).markdown;
+
+        let review = md.find("## 上周行动项回顾").expect("应按模板输出回顾章节");
+        let blocked = md.find("## 阻塞与风险").expect("应按模板输出阻塞章节");
+        let decisions = md.find("## 决策事项").expect("应输出决策事项");
+        assert!(
+            review < blocked && blocked < decisions,
+            "自定义章节必须按模板声明顺序，而不是模型返回顺序"
+        );
+        assert!(!md.contains("## 本周进展"), "缺失内容不得输出空标题");
+        assert!(!md.contains("## 风险与阻碍"), "standup 模板不含风险区块");
+        assert!(!md.contains("## 会议议题"), "standup 模板不含议题区块");
     }
 }

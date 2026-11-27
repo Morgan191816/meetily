@@ -21,6 +21,7 @@ use app_lib::minutes::llm::{parse_step2_json, parse_step3_json, MinutesDraft, Ta
 use app_lib::minutes::orchestrator::{run_minutes_with, MinutesInput, MinutesLlm, MinutesOutput};
 use app_lib::minutes::quality::render_quality_report;
 use app_lib::minutes::render::{render_minutes, MinutesRenderInput};
+use app_lib::minutes::templates::{self, MinutesTemplate};
 use app_lib::minutes::validate::{validate_tasks, ValidationOutcome};
 
 const TODAY: (i32, u32, u32) = (2026, 8, 4); // 周二
@@ -208,6 +209,7 @@ impl MinutesLlm for FixtureLlm {
     async fn summarize(
         &self,
         corrected_text: &str,
+        _template: &MinutesTemplate,
     ) -> Result<(MinutesDraft, Option<(u32, u32)>), String> {
         self.prompts
             .lock()
@@ -248,6 +250,7 @@ fn input<'a>(text: &'a str, members: &'a [String]) -> MinutesInput<'a> {
         project: Some("测试会议"),
         source: Some("01_原文.md"),
         metadata_created_at: None,
+        template_id: None,
         cancel: None,
     }
 }
@@ -545,18 +548,21 @@ fn deviation_9_next_meeting_with_only_extra_keys_is_omitted() {
     assert!(draft.next_meeting.is_none());
 
     let validation = ValidationOutcome::default();
-    let document = render_minutes(&MinutesRenderInput {
-        title: "x".to_string(),
-        meeting_date: "2026-08-04".to_string(),
-        project: "会议".to_string(),
-        source: "逐字稿".to_string(),
-        today: today(),
-        attendees: Vec::new(),
-        unmatched_attendees: Vec::new(),
-        draft: &draft,
-        validation: &validation,
-        claims: &[],
-        traceability_pass: true,
-    });
+    let document = render_minutes(
+        &MinutesRenderInput {
+            title: "x".to_string(),
+            meeting_date: "2026-08-04".to_string(),
+            project: "会议".to_string(),
+            source: "逐字稿".to_string(),
+            today: today(),
+            attendees: Vec::new(),
+            unmatched_attendees: Vec::new(),
+            draft: &draft,
+            validation: &validation,
+            claims: &[],
+            traceability_pass: true,
+        },
+        templates::find(templates::DEFAULT_ID),
+    );
     assert!(!document.markdown.contains("## 下次会议"));
 }

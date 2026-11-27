@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use tokio_util::sync::CancellationToken;
 
+use crate::minutes::templates::MinutesTemplate;
 use crate::summary::llm_client::{generate_summary, LLMProvider};
 use crate::summary::CustomOpenAIConfig;
 
@@ -168,8 +169,9 @@ async fn call_llm(
 pub async fn summarize(
     params: &LlmParams<'_>,
     corrected_text: &str,
+    template: &MinutesTemplate,
 ) -> Result<(MinutesDraft, Option<(u32, u32)>), String> {
-    let (raw, usage) = call_llm(params, &step2_prompt(corrected_text)).await?;
+    let (raw, usage) = call_llm(params, &step2_prompt(corrected_text, template)).await?;
     let draft = parse_step2_json(&raw)
         .ok_or_else(|| "纪要总结返回内容无法解析为 JSON".to_string())?;
     if is_schema_echo(&draft) {
@@ -192,27 +194,47 @@ pub async fn extract_tasks(
     Ok((parse_step3_json(&raw), merge_usage(usage, retry_usage)))
 }
 
-fn step2_prompt(corrected_text: &str) -> String {
-    format!(
-        "请根据以下会议记录原文，为没有参会的同事写一份完整会议纪要。\n\n\
+fn step2_prompt(corrected_text: &str, template: &MinutesTemplate) -> String {
+    let mut prompt = format!(
+        "请根据以下会议记录原文，为没有参会的同事写一份完整会议纪要（会议类型：{}）。\n\n\
          ## 原始文本\n{corrected_text}\n\n\
          写作要求（按顺序完成）：\n\
-         1. **会议摘要**（overview）：150-250 字，按「会议目的 → 主要结论 → 未决事项」组织，\
-         让未参会者读完就知道这场会解决了什么、还差什么。\n\
+         1. **会议摘要**（overview）：{}，让未参会者读完就知道这场会解决了什么、还差什么。\n\
          2. **会议标题**（title，10-20 字概括核心目的）与**会议日期**（date，YYYY-MM-DD）。\n\
          3. **分议题**（topics）：每个议题的讨论要点、结论、分歧点各 80-150 字，写清前因后果与判断依据。\n\
          4. **决策**（decisions）：只记录会上明确拍板或分工的事项，写清内容、依据、生效时间。\n\
          5. **风险与阻碍**（risks）：影响目标达成的问题，附严重度、缓解措施、负责人。\n\
          6. **待决问题**（open_issues）：会上没有结论、需要后续确认的事项。\n\
-         7. **下次会议**（next_meeting）：日期与议程，无则给 null。\n\n\
-         严禁：\n\
+         7. **下次会议**（next_meeting）：日期与议程，无则给 null。\n",
+        template.name, template.overview_hint
+    );
+    if !template.custom_sections.is_empty() {
+        prompt.push_str(
+            "\n**自定义章节**（custom_sections）：为下列每个章节产出一条 `custom_sections` 项，\
+             `heading` 必须与标题完全一致；没有内容则省略该条，不要输出空章节：\n",
+        );
+        for spec in template.custom_sections {
+            prompt.push_str(&format!("- {}：{}\n", spec.heading, spec.hint));
+        }
+    }
+    if !template.extra_instructions.is_empty() {
+        prompt.push_str(&format!(
+            "\n**本类型附加要求**：{}\n",
+            template.extra_instructions
+        ));
+    }
+    prompt.push_str(
+        "\n严禁：\n\
          - 使用「本次会议就……进行了深入讨论」「与会人员一致认为」等空泛套话；\n\
          - 直接复述原文超过 15 字，必须改写为自己的话；\n\
          - 编造人名、日期、数字——这些信息只能来自原文；\n\
          - 把没有结论的讨论写成决策。\n\
          属推断的内容请在句首标注「[推论]」。\n\n\
-         请严格以 JSON 输出（不要输出其他文字），无内容的数组给空数组：{STEP2_JSON_SCHEMA}"
-    )
+         必须输出 JSON，字段：overview, title, date, decisions, topics, risks, open_issues, next_meeting, custom_sections。\n\
+         请严格以 JSON 输出（不要输出其他文字），无内容的数组给空数组：",
+    );
+    prompt.push_str(STEP2_JSON_SCHEMA);
+    prompt
 }
 
 fn step3_prompt(corrected_text: &str) -> String {
@@ -518,6 +540,26 @@ mod tests {
         assert_eq!(merge_usage(Some((10, 20)), None), Some((10, 20)));
         assert_eq!(merge_usage(None, Some((30, 40))), Some((30, 40)));
         assert_eq!(merge_usage(None, None), None);
+    }
+
+    #[test]
+    fn step2_prompt_injects_template_instructions_and_custom_sections() {
+        use crate::minutes::templates::find;
+
+        let prompt = step2_prompt("原文", find("review"));
+        assert!(prompt.contains("结论必须明确写通过/有条件通过/不通过"));
+        assert!(prompt.contains("评审对象与材料"));
+        assert!(prompt.contains("评审结论"));
+        assert!(prompt.contains("150-250 字"));
+        // 末尾字段清单必须覆盖全部顶层键
+        assert!(prompt.contains(
+            "overview, title, date, decisions, topics, risks, open_issues, next_meeting, custom_sections"
+        ));
+
+        // general 无自定义章节时不注入章节清单
+        let general = step2_prompt("原文", find("general"));
+        assert!(!general.contains("自定义章节"));
+        assert!(general.contains("必须输出 JSON，字段："));
     }
 
     #[test]

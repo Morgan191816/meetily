@@ -38,6 +38,7 @@ impl MinutesLlm for ReqwestMinutesLlm {
     async fn summarize(
         &self,
         corrected_text: &str,
+        template: &crate::minutes::templates::MinutesTemplate,
     ) -> Result<(MinutesDraft, Option<(u32, u32)>), String> {
         crate::minutes::llm::summarize(
             &crate::minutes::llm::LlmParams {
@@ -46,6 +47,7 @@ impl MinutesLlm for ReqwestMinutesLlm {
                 cancel: Some(&self.cancel),
             },
             corrected_text,
+            template,
         )
         .await
     }
@@ -148,6 +150,8 @@ pub async fn api_generate_minutes<R: Runtime>(
             project: project.as_deref(),
             source: source.as_deref(),
             metadata_created_at: Some(created_at.as_str()),
+            // Task 3 起由命令参数/设置提供；当前固定走默认模板
+            template_id: None,
             cancel: Some(&token),
         },
         &llm,

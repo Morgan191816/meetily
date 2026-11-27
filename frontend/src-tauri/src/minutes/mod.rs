@@ -11,6 +11,7 @@ pub mod orchestrator;
 pub mod quality;
 pub mod render;
 pub mod roster;
+pub mod templates;
 pub mod traceability;
 pub mod urgency;
 pub mod validate;

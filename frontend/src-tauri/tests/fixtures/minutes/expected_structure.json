@@ -3,7 +3,7 @@
   "_notes": [
     "excel.rows 是 Python 在真实系统日期下生成的参考值；结束日期/紧急程度依赖参考日，Rust 测试只断言稳定列（见 tests/minutes_parity.rs）。",
     "quality.h2_sections 含 Python 恒输出的「待确认沉淀候选」，Rust 已裁定不输出该空节（偏离 #5）。",
-    "minutes.h2_sections 手工加入「会议摘要」与「项目背景与材料」：Python 桥接层不识别 step2 的 overview/custom_sections，Rust 端按 Task 1 渲染。"
+    "minutes.h2_sections 手工加入「会议摘要」：Python 桥接层不识别 step2 的 overview，Rust 端按 Task 1 渲染。Task 2 起按模板渲染，general 模板无自定义章节，step2 夹具里的 custom_sections 不输出。"
   ],
   "minutes": {
     "frontmatter_keys": [
@@ -20,7 +20,6 @@
       "会议摘要",
       "核心结论",
       "会议议题",
-      "项目背景与材料",
       "决策事项",
       "行动项",
       "风险与阻碍",
