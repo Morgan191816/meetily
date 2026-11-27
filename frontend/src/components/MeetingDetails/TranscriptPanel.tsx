@@ -11,6 +11,12 @@ import { invoke } from '@tauri-apps/api/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDiarization } from '@/hooks/useDiarization';
 
+const DIARIZATION_STAGE_LABELS: Record<string, string> = {
+  decoding: '正在解码音频',
+  diarizing: '正在区分说话人',
+  writing: '正在写入标签',
+};
+
 interface TranscriptPanelProps {
   transcripts: Transcript[];
   customPrompt: string;
@@ -28,6 +34,8 @@ interface TranscriptPanelProps {
   totalCount?: number;
   loadedCount?: number;
   onLoadMore?: () => void;
+  /** 分页加载失败；用于停止筛选时的自动补拉。 */
+  loadError?: string | null;
 
   // Retranscription props
   meetingId?: string;
@@ -50,6 +58,7 @@ export function TranscriptPanel({
   totalCount,
   loadedCount,
   onLoadMore,
+  loadError,
   meetingId,
   meetingFolderPath,
   onRefetchTranscripts,
@@ -129,11 +138,12 @@ export function TranscriptPanel({
 
   // 筛选只作用于已加载页：选中具体说话人时逐页补拉，直到全部加载完
   useEffect(() => {
-    if (activeFilter === 'all' || !hasMore || isLoadingMore || !onLoadMore) return;
+    // 加载失败后停止自动补拉，否则每 150ms 重试一次失败的请求
+    if (activeFilter === 'all' || !hasMore || isLoadingMore || !onLoadMore || loadError) return;
     // 150ms 大于 loadMore 的 100ms 防抖，避免调用被丢弃后停住
     const timer = setTimeout(() => onLoadMore(), 150);
     return () => clearTimeout(timer);
-  }, [activeFilter, hasMore, isLoadingMore, onLoadMore]);
+  }, [activeFilter, hasMore, isLoadingMore, onLoadMore, loadError]);
 
   const visibleSegments = useMemo(
     () => (activeFilter === 'all' ? convertedSegments : convertedSegments.filter((s) => s.speaker === activeFilter)),
@@ -154,7 +164,9 @@ export function TranscriptPanel({
         />
         {diarization.status === 'processing' && (
           <>
-            <span className="text-sm text-gray-600">正在区分说话人… {diarization.progress}%</span>
+            <span className="text-sm text-gray-600">
+              {DIARIZATION_STAGE_LABELS[diarization.stage] ?? '正在区分说话人'}… {diarization.progress}%（长会议较慢，可继续使用）
+            </span>
             <Button
               variant="outline"
               size="sm"
@@ -179,7 +191,9 @@ export function TranscriptPanel({
           <span className="text-sm text-amber-700">未安装说话人模型，无法区分说话人（可在设置中下载）</span>
         )}
         {activeFilter !== 'all' && hasMore && (
-          <span className="text-sm text-gray-600">正在加载全部逐字稿…</span>
+          <span className="text-sm text-gray-600">
+            {loadError ? '加载更多逐字稿失败' : '正在加载全部逐字稿…'}
+          </span>
         )}
         {hasSpeakers && (
           <select

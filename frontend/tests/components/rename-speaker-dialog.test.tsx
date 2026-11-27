@@ -53,6 +53,7 @@ describe('RenameSpeakerDialog', () => {
     await act(async () => {});
 
     const input = renderer!.root.findByType('input');
+    expect(input.props.maxLength).toBe(30);
     await act(async () => {
       input.props.onChange({ target: { value: '曹磊' } });
     });

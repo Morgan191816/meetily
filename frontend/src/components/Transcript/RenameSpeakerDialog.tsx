@@ -54,6 +54,7 @@ export function RenameSpeakerDialog({
           list="roster-names"
           aria-label="说话人姓名"
           placeholder="输入姓名，留空则恢复默认"
+          maxLength={30}
           onChange={(event) => setName(event.target.value)}
         />
         {error && <p className="text-sm text-red-600">{`保存失败：${error}`}</p>}

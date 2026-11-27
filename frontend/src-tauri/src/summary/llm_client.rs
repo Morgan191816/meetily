@@ -87,6 +87,27 @@ pub fn build_openai_compat_chat_body(
 #[derive(Deserialize, Debug)]
 pub struct ChatResponse {
     pub choices: Vec<Choice>,
+    #[serde(default)]
+    pub usage: Option<Usage>,
+}
+
+/// Token 用量。Anthropic 用 input_tokens/output_tokens，靠 alias 复用同一结构。
+#[derive(Deserialize, Debug, Default)]
+pub struct Usage {
+    #[serde(default, alias = "input_tokens")]
+    pub prompt_tokens: Option<u32>,
+    #[serde(default, alias = "output_tokens")]
+    pub completion_tokens: Option<u32>,
+    #[serde(default)]
+    #[allow(dead_code)] // 仅部分服务返回，渲染只取输入/输出
+    pub total_tokens: Option<u32>,
+}
+
+impl Usage {
+    /// 输入、输出都拿到才算有效用量。
+    fn pair(&self) -> Option<(u32, u32)> {
+        Some((self.prompt_tokens?, self.completion_tokens?))
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -117,6 +138,8 @@ pub struct ClaudeRequest {
 #[derive(Deserialize, Debug)]
 pub struct ClaudeChatResponse {
     pub content: Vec<ClaudeChatContent>,
+    #[serde(default)]
+    pub usage: Option<Usage>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -142,6 +165,7 @@ impl ClaudeChatResponse {
             reasoning_stripped: self.content.iter().any(|block| {
                 matches!(block.block_type.as_str(), "thinking" | "redacted_thinking")
             }),
+            usage: self.usage.as_ref().and_then(Usage::pair),
         })
     }
 }
@@ -152,6 +176,8 @@ pub(crate) struct LlmCompletion {
     /// 私有推理文本；旧摘要路径不读取，只供 minutes 在 content 为空时回退。
     pub reasoning: String,
     pub reasoning_stripped: bool,
+    /// 输入、输出 token 数；服务未返回时为 None。
+    pub usage: Option<(u32, u32)>,
 }
 
 impl ChatResponse {
@@ -178,6 +204,7 @@ impl ChatResponse {
                 .to_string(),
             reasoning_stripped: !reasoning.is_empty(),
             reasoning,
+            usage: self.usage.as_ref().and_then(Usage::pair),
         })
     }
 }
@@ -651,6 +678,7 @@ mod tests {
                     content: String::new(),
                     reasoning: "private".to_string(),
                     reasoning_stripped: true,
+                    usage: None,
                 }
             );
         }
@@ -666,6 +694,35 @@ mod tests {
         assert_eq!(completion.content, "");
         assert_eq!(completion.reasoning, "{\"a\":1}");
         assert!(completion.reasoning_stripped);
+    }
+
+    #[test]
+    fn parses_openai_usage_when_present() {
+        let response: ChatResponse = serde_json::from_value(json!({
+            "choices": [{"message": {"content": "ok"}}],
+            "usage": {"prompt_tokens": 12, "completion_tokens": 34, "total_tokens": 46}
+        }))
+        .unwrap();
+        assert_eq!(response.completion().unwrap().usage, Some((12, 34)));
+    }
+
+    #[test]
+    fn omits_usage_when_response_has_none() {
+        let response: ChatResponse = serde_json::from_value(json!({
+            "choices": [{"message": {"content": "ok"}}]
+        }))
+        .unwrap();
+        assert_eq!(response.completion().unwrap().usage, None);
+    }
+
+    #[test]
+    fn parses_anthropic_usage_input_and_output_tokens() {
+        let response: ClaudeChatResponse = serde_json::from_value(json!({
+            "content": [{"type": "text", "text": "ok"}],
+            "usage": {"input_tokens": 7, "output_tokens": 9}
+        }))
+        .unwrap();
+        assert_eq!(response.completion().unwrap().usage, Some((7, 9)));
     }
 
     #[test]
@@ -805,6 +862,7 @@ mod tests {
                 content: "ok".to_string(),
                 reasoning: String::new(),
                 reasoning_stripped: false,
+                usage: None,
             }
         );
     }
@@ -1062,6 +1120,7 @@ mod tests {
                 content: "Meeting summary.".to_string(),
                 reasoning: String::new(),
                 reasoning_stripped: false,
+                usage: None,
             }
         );
     }
@@ -1082,6 +1141,7 @@ mod tests {
                 content: "Meeting summary.".to_string(),
                 reasoning: String::new(),
                 reasoning_stripped: true,
+                usage: None,
             })
         );
     }

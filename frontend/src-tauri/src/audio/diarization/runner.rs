@@ -23,6 +23,10 @@ static ACTIVE_RUNS: LazyLock<Mutex<HashMap<String, CancellationToken>>> =
 static PENDING_RUNS: LazyLock<Mutex<HashMap<String, Arc<CancellationToken>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// 同一时刻只跑一个会议的分离，避免两份解码缓冲同时驻留。
+static DIARIZATION_SEMAPHORE: LazyLock<tokio::sync::Semaphore> =
+    LazyLock::new(|| tokio::sync::Semaphore::new(1));
+
 /// 旧任务在阶段边界才响应取消，`diarize_blocking` 不可中断：
 /// 2 小时会议要跑 10–30 分钟，排队必须等得起。
 const QUEUE_POLL: Duration = Duration::from_millis(500);
@@ -265,6 +269,14 @@ pub async fn run_for_meeting<R: Runtime>(
     if cancel.is_cancelled() {
         return Err("已取消".to_string());
     }
+    // 全局串行：解码缓冲与 sherpa 模型都很吃内存，等槽位期间可取消。
+    let _permit = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Err("已取消".to_string()),
+        permit = DIARIZATION_SEMAPHORE.acquire() => {
+            permit.map_err(|error| format!("等待分离槽位失败：{error}"))?
+        }
+    };
     progress("decoding", 5);
     let samples = tokio::task::spawn_blocking(move || {
         decode_audio_file(&audio_path).map(|decoded| decoded.to_whisper_format())
@@ -349,6 +361,19 @@ mod tests {
         assert!(!token.is_cancelled(), "抢占失败不应取消在跑任务");
         assert!(claim(id).is_ok(), "槽位释放后应可再次抢占");
         drop(RunGuard(id.to_string()));
+    }
+
+    #[tokio::test]
+    async fn global_semaphore_allows_only_one_diarization() {
+        let permit = DIARIZATION_SEMAPHORE.acquire().await.unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), DIARIZATION_SEMAPHORE.acquire())
+                .await
+                .is_err(),
+            "第二个会议必须等第一个释放槽位"
+        );
+        drop(permit);
+        assert!(DIARIZATION_SEMAPHORE.try_acquire().is_ok());
     }
 
     #[tokio::test]

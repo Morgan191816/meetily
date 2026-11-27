@@ -12,7 +12,7 @@ use crate::audio::transcription::term_correction::correct_terms;
 use crate::minutes::conflict::detect_conflicts;
 use crate::minutes::dates::parse_date;
 use crate::minutes::excel::build_workbook_bytes;
-use crate::minutes::llm::{MinutesDraft, TaskItem};
+use crate::minutes::llm::{merge_usage, MinutesDraft, TaskItem};
 use crate::minutes::names::extract_attendees;
 use crate::minutes::quality::render_quality_report;
 use crate::minutes::render::{render_minutes, MinutesRenderInput};
@@ -22,8 +22,14 @@ use crate::minutes::validate::validate_tasks;
 /// 两次 LLM 调用；测试注入 stub，生产注入 reqwest 实现。
 #[async_trait::async_trait]
 pub trait MinutesLlm: Send + Sync {
-    async fn summarize(&self, corrected_text: &str) -> Result<MinutesDraft, String>;
-    async fn extract_tasks(&self, corrected_text: &str) -> Result<Vec<TaskItem>, String>;
+    async fn summarize(
+        &self,
+        corrected_text: &str,
+    ) -> Result<(MinutesDraft, Option<(u32, u32)>), String>;
+    async fn extract_tasks(
+        &self,
+        corrected_text: &str,
+    ) -> Result<(Vec<TaskItem>, Option<(u32, u32)>), String>;
 }
 
 /// 编排产物；`tasks` 为质检修复后的任务，用于落库与 Excel 导出。
@@ -37,6 +43,8 @@ pub struct MinutesOutput {
     pub tasks: Vec<TaskItem>,
     pub traceability_pass: bool,
     pub validation_pass: bool,
+    /// step2 + step3 的累计用量（输入、输出）。
+    pub usage: Option<(u32, u32)>,
 }
 
 /// 阶段进度回调：`(stage, percent)`。命令层桥接成 Tauri 事件，测试传空实现。
@@ -102,7 +110,7 @@ pub async fn run_minutes_with_progress(
 
     // 2. step2 总结
     progress("summarizing", 25);
-    let draft = llm
+    let (draft, step2_usage) = llm
         .summarize(&corrected)
         .await
         .map_err(|error| format!("纪要生成失败：{error}"))?;
@@ -110,10 +118,11 @@ pub async fn run_minutes_with_progress(
 
     // 3. step3 任务拆解
     progress("extracting", 55);
-    let tasks = llm
+    let (tasks, step3_usage) = llm
         .extract_tasks(&corrected)
         .await
         .map_err(|error| format!("行动项提取失败：{error}"))?;
+    let usage = merge_usage(step2_usage, step3_usage);
     ensure_not_cancelled(input.cancel)?;
 
     // 4. 冲突检测（对原始任务，与 Python `_step35` 一致）
@@ -176,7 +185,7 @@ pub async fn run_minutes_with_progress(
         claims: &claims,
         traceability_pass,
     });
-    let quality_markdown = render_quality_report(&claims, &validation, &conflicts);
+    let quality_markdown = render_quality_report(&claims, &validation, &conflicts, usage);
 
     // 9. Excel 字节
     let excel_bytes = build_workbook_bytes(&validation.fixed_tasks, input.today)?;
@@ -190,6 +199,7 @@ pub async fn run_minutes_with_progress(
         tasks: validation.fixed_tasks,
         traceability_pass,
         validation_pass: validation.pass,
+        usage,
     })
 }
 
@@ -324,12 +334,38 @@ mod tests {
 
     #[async_trait::async_trait]
     impl MinutesLlm for StubLlm {
-        async fn summarize(&self, _corrected_text: &str) -> Result<MinutesDraft, String> {
-            Ok(self.draft.clone())
+        async fn summarize(
+            &self,
+            _corrected_text: &str,
+        ) -> Result<(MinutesDraft, Option<(u32, u32)>), String> {
+            Ok((self.draft.clone(), None))
         }
 
-        async fn extract_tasks(&self, _corrected_text: &str) -> Result<Vec<TaskItem>, String> {
-            Ok(self.tasks.clone())
+        async fn extract_tasks(
+            &self,
+            _corrected_text: &str,
+        ) -> Result<(Vec<TaskItem>, Option<(u32, u32)>), String> {
+            Ok((self.tasks.clone(), None))
+        }
+    }
+
+    /// 两步都返回用量，验证编排层累加。
+    struct UsageLlm;
+
+    #[async_trait::async_trait]
+    impl MinutesLlm for UsageLlm {
+        async fn summarize(
+            &self,
+            _corrected_text: &str,
+        ) -> Result<(MinutesDraft, Option<(u32, u32)>), String> {
+            Ok((step2_fixture(), Some((10, 20))))
+        }
+
+        async fn extract_tasks(
+            &self,
+            _corrected_text: &str,
+        ) -> Result<(Vec<TaskItem>, Option<(u32, u32)>), String> {
+            Ok((step3_fixture(), Some((30, 40))))
         }
     }
 
@@ -337,11 +373,17 @@ mod tests {
 
     #[async_trait::async_trait]
     impl MinutesLlm for FailingLlm {
-        async fn summarize(&self, _corrected_text: &str) -> Result<MinutesDraft, String> {
+        async fn summarize(
+            &self,
+            _corrected_text: &str,
+        ) -> Result<(MinutesDraft, Option<(u32, u32)>), String> {
             Err("模型不可用".to_string())
         }
 
-        async fn extract_tasks(&self, _corrected_text: &str) -> Result<Vec<TaskItem>, String> {
+        async fn extract_tasks(
+            &self,
+            _corrected_text: &str,
+        ) -> Result<(Vec<TaskItem>, Option<(u32, u32)>), String> {
             Err("模型不可用".to_string())
         }
     }
@@ -363,6 +405,20 @@ mod tests {
         assert_eq!(out.title, "路灯会议");
         assert_eq!(out.meeting_date, "2026-08-04");
         assert_eq!(out.tasks.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn usage_accumulates_across_steps() {
+        let out = run_minutes(
+            "参会人员：许日政\n会上确认华硕不落总灯已经结案。跟进冯亚项目进度。",
+            &UsageLlm,
+            &members(),
+            today(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(out.usage, Some((40, 60)));
+        assert!(out.quality_markdown.contains("- 模型用量：输入 40 tokens / 输出 60 tokens"));
     }
 
     #[tokio::test]

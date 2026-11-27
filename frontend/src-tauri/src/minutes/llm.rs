@@ -104,7 +104,22 @@ pub struct LlmParams<'a> {
     pub cancel: Option<&'a CancellationToken>,
 }
 
-async fn call_llm(params: &LlmParams<'_>, user_prompt: &str) -> Result<String, String> {
+/// 两次调用的用量相加；任一侧缺失时保留有值的一侧。
+pub(crate) fn merge_usage(
+    first: Option<(u32, u32)>,
+    second: Option<(u32, u32)>,
+) -> Option<(u32, u32)> {
+    match (first, second) {
+        (Some((a_in, a_out)), Some((b_in, b_out))) => Some((a_in + b_in, a_out + b_out)),
+        (Some(usage), None) | (None, Some(usage)) => Some(usage),
+        (None, None) => None,
+    }
+}
+
+async fn call_llm(
+    params: &LlmParams<'_>,
+    user_prompt: &str,
+) -> Result<(String, Option<(u32, u32)>), String> {
     let completion = generate_summary(
         params.client,
         &LLMProvider::CustomOpenAI,
@@ -122,43 +137,47 @@ async fn call_llm(params: &LlmParams<'_>, user_prompt: &str) -> Result<String, S
     )
     .await
     .map_err(|error| format!("调用大模型失败：{error}"))?;
+    let usage = completion.usage;
     // content 为 null 时 completion.content 是空串，回退 reasoning_content（照 qwen_client.py:69-75）
     if !completion.content.trim().is_empty() {
-        return Ok(completion.content);
+        return Ok((completion.content, usage));
     }
     if completion.reasoning.trim().is_empty() {
         return Err("大模型返回内容为空，请检查模型设置或稍后重试".to_string());
     }
     // reasoning 里可能有草稿/示例围栏，优先取结束位置最靠后的合法 JSON
-    Ok(last_json_text(&completion.reasoning).unwrap_or(completion.reasoning))
+    Ok((
+        last_json_text(&completion.reasoning).unwrap_or(completion.reasoning),
+        usage,
+    ))
 }
 
 /// step2：会议总结。Python 版解析失败按空结构处理，这里返回可读错误。
 pub async fn summarize(
     params: &LlmParams<'_>,
     corrected_text: &str,
-) -> Result<MinutesDraft, String> {
-    let raw = call_llm(params, &step2_prompt(corrected_text)).await?;
+) -> Result<(MinutesDraft, Option<(u32, u32)>), String> {
+    let (raw, usage) = call_llm(params, &step2_prompt(corrected_text)).await?;
     let draft = parse_step2_json(&raw)
         .ok_or_else(|| "纪要总结返回内容无法解析为 JSON".to_string())?;
     if is_schema_echo(&draft) {
         return Err("大模型只返回了示例结构，请重试".to_string());
     }
-    Ok(draft)
+    Ok((draft, usage))
 }
 
 /// step3：任务拆解。解析失败重试一次（照 assistant_bridge.py:314-325）。
 pub async fn extract_tasks(
     params: &LlmParams<'_>,
     corrected_text: &str,
-) -> Result<Vec<TaskItem>, String> {
+) -> Result<(Vec<TaskItem>, Option<(u32, u32)>), String> {
     let prompt = step3_prompt(corrected_text);
-    let raw = call_llm(params, &prompt).await?;
+    let (raw, usage) = call_llm(params, &prompt).await?;
     if let Some(value) = extract_json(&raw, false) {
-        return Ok(tasks_from_value(&value));
+        return Ok((tasks_from_value(&value), usage));
     }
-    let raw = call_llm(params, &prompt).await?;
-    Ok(parse_step3_json(&raw))
+    let (raw, retry_usage) = call_llm(params, &prompt).await?;
+    Ok((parse_step3_json(&raw), merge_usage(usage, retry_usage)))
 }
 
 fn step2_prompt(corrected_text: &str) -> String {
@@ -453,6 +472,14 @@ fn value_text(value: Option<&Value>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn merges_usage_across_calls() {
+        assert_eq!(merge_usage(Some((10, 20)), Some((30, 40))), Some((40, 60)));
+        assert_eq!(merge_usage(Some((10, 20)), None), Some((10, 20)));
+        assert_eq!(merge_usage(None, Some((30, 40))), Some((30, 40)));
+        assert_eq!(merge_usage(None, None), None);
+    }
 
     #[test]
     fn parses_rich_step2_schema() {

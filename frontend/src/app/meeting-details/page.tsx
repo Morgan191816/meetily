@@ -295,6 +295,7 @@ function MeetingDetailsContent() {
     totalCount={totalCount}
     loadedCount={loadedCount}
     onLoadMore={loadMore}
+    loadError={transcriptError}
   />;
 }
 

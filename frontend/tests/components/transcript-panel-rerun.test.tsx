@@ -26,6 +26,7 @@ mock.module('../../src/hooks/useDiarization', () => ({
   useDiarization: () => ({
     status,
     progress: 0,
+    stage: '',
     unavailable: status === 'unavailable',
     error: null,
     empty: false,

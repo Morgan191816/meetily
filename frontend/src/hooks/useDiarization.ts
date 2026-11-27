@@ -46,6 +46,8 @@ export function errorAfterCancel(error: string): string | null {
 export function useDiarization(meetingId: string) {
   const [status, setStatus] = useState<DiarizationStatus>('idle');
   const [progress, setProgress] = useState(0);
+  // 后端阶段名（decoding/diarizing/writing），用于进度文案
+  const [stage, setStage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [empty, setEmpty] = useState(false);
   const [nameKey, setNameKey] = useState(0);
@@ -72,6 +74,7 @@ export function useDiarization(meetingId: string) {
         if (cancelledRef.current) return;
         setStatus('processing');
         setProgress(event.payload.percent);
+        setStage(event.payload.stage);
       });
       if (disposed) {
         unlistenProgress();
@@ -86,6 +89,7 @@ export function useDiarization(meetingId: string) {
         setEmpty((event.payload.labels ?? 1) === 0);
         setStatus('done');
         setProgress(100);
+        setStage('done');
         bumpLabels();
       });
       if (disposed) {
@@ -112,6 +116,7 @@ export function useDiarization(meetingId: string) {
         const failure = failureAfterRun(event.payload.error);
         setStatus(failure.status);
         setProgress(failure.progress);
+        setStage('');
         setError(failure.error);
       });
       if (disposed) {
@@ -151,6 +156,7 @@ export function useDiarization(meetingId: string) {
     }
     setStatus('idle');
     setProgress(0);
+    setStage('');
   }, [meetingId]);
 
   // 手动重新分离：进度事件驱动状态，失败由命令返回值兜底
@@ -159,6 +165,7 @@ export function useDiarization(meetingId: string) {
     cancelledRef.current = false;
     setStatus('processing');
     setProgress(0);
+    setStage('');
     setError(null);
     setEmpty(false);
     try {
@@ -168,6 +175,7 @@ export function useDiarization(meetingId: string) {
       const failure = failureAfterRun(message);
       setStatus(failure.status);
       setProgress(failure.progress);
+      setStage('');
       setError(errorAfterCancel(message));
     }
   }, [meetingId]);
@@ -175,6 +183,7 @@ export function useDiarization(meetingId: string) {
   return {
     status,
     progress,
+    stage,
     unavailable: status === 'unavailable',
     error,
     empty,

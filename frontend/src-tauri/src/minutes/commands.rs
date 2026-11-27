@@ -34,7 +34,10 @@ struct ReqwestMinutesLlm {
 
 #[async_trait::async_trait]
 impl MinutesLlm for ReqwestMinutesLlm {
-    async fn summarize(&self, corrected_text: &str) -> Result<MinutesDraft, String> {
+    async fn summarize(
+        &self,
+        corrected_text: &str,
+    ) -> Result<(MinutesDraft, Option<(u32, u32)>), String> {
         crate::minutes::llm::summarize(
             &crate::minutes::llm::LlmParams {
                 client: &self.client,
@@ -46,7 +49,10 @@ impl MinutesLlm for ReqwestMinutesLlm {
         .await
     }
 
-    async fn extract_tasks(&self, corrected_text: &str) -> Result<Vec<TaskItem>, String> {
+    async fn extract_tasks(
+        &self,
+        corrected_text: &str,
+    ) -> Result<(Vec<TaskItem>, Option<(u32, u32)>), String> {
         crate::minutes::llm::extract_tasks(
             &crate::minutes::llm::LlmParams {
                 client: &self.client,
@@ -162,6 +168,12 @@ pub async fn api_generate_minutes<R: Runtime>(
             return Err(error);
         }
     };
+
+    if let Some((input_tokens, output_tokens)) = output.usage {
+        log::info!(
+            "纪要模型用量：meeting_id={meeting_id}, input_tokens={input_tokens}, output_tokens={output_tokens}"
+        );
+    }
 
     // 取消可能落在最后检查点与落库之间：写库前再确认一次，取消则不落库、不 emit done
     if token.is_cancelled() {

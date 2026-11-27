@@ -109,10 +109,12 @@ describe('useDiarization', () => {
     await emit('diarization-progress', { meetingId: 'meeting-a', stage: 'decoding', percent: 5 });
     expect(state.status).toBe('processing');
     expect(state.progress).toBe(5);
+    expect(state.stage).toBe('decoding');
 
     await emit('diarization-error', { meetingId: 'meeting-a', error: '分离任务失败' });
     expect(state.status).toBe('idle');
     expect(state.progress).toBe(0);
+    expect(state.stage).toBe('');
     expect(state.error).toBe('分离任务失败');
   });
 

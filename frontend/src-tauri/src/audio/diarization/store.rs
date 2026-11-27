@@ -32,7 +32,8 @@ pub async fn set_display_name(
     label: &str,
     name: &str,
 ) -> Result<(), String> {
-    let name = name.trim();
+    // 与前端 maxLength 一致：按字符截断，避免把多字节姓名截坏。
+    let name: String = name.trim().chars().take(30).collect();
     if name.is_empty() {
         sqlx::query("DELETE FROM meeting_speakers WHERE meeting_id = ? AND label = ?")
             .bind(meeting_id)
@@ -134,5 +135,16 @@ mod tests {
             .unwrap();
         let rows = list_speakers(&pool, "m1").await.unwrap();
         assert_eq!(rows[0].display_name, None);
+    }
+
+    #[tokio::test]
+    async fn truncates_display_name_to_30_chars() {
+        let pool = test_pool().await;
+        let long_name = "名".repeat(40);
+        set_display_name(&pool, "m1", "SPEAKER_00", &long_name)
+            .await
+            .unwrap();
+        let rows = list_speakers(&pool, "m1").await.unwrap();
+        assert_eq!(rows[0].display_name, Some("名".repeat(30)));
     }
 }

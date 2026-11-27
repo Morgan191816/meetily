@@ -14,6 +14,7 @@ pub fn render_quality_report(
     trace: &[ClaimResult],
     validation: &ValidationOutcome,
     conflicts: &[Conflict],
+    usage: Option<(u32, u32)>,
 ) -> String {
     let mut lines = vec!["# 质检报告".to_string(), String::new()];
 
@@ -24,6 +25,13 @@ pub fn render_quality_report(
         format_traceability_report(trace)
     });
     lines.push(String::new());
+
+    if let Some((input_tokens, output_tokens)) = usage {
+        lines.push(format!(
+            "- 模型用量：输入 {input_tokens} tokens / 输出 {output_tokens} tokens"
+        ));
+        lines.push(String::new());
+    }
 
     // Python 在无行动项时跳过质检（orchestrator.py:578-583）
     lines.push("## 质量自检".to_string());
@@ -247,7 +255,7 @@ mod tests {
 
     #[test]
     fn report_has_four_sections_in_order() {
-        let md = render_quality_report(&[], &empty_validation(), &[]);
+        let md = render_quality_report(&[], &empty_validation(), &[], None);
         for section in ["# 质检报告", "## 溯源校验", "## 质量自检", "## 任务冲突检测"] {
             assert!(md.contains(section), "缺少 {section}");
         }
@@ -255,9 +263,23 @@ mod tests {
 
     #[test]
     fn empty_inputs_render_friendly_placeholders() {
-        let md = render_quality_report(&[], &empty_validation(), &[]);
+        let md = render_quality_report(&[], &empty_validation(), &[], None);
         assert!(md.contains("无需要校验的声明项"));
         assert!(md.contains("未发现任务冲突"));
+    }
+
+    #[test]
+    fn model_usage_line_only_renders_when_available() {
+        let with_usage = render_quality_report(&[], &empty_validation(), &[], Some((123, 456)));
+        let usage_line = "- 模型用量：输入 123 tokens / 输出 456 tokens";
+        assert!(with_usage.contains(usage_line));
+        assert!(
+            with_usage.find(usage_line).unwrap() < with_usage.find("## 质量自检").unwrap(),
+            "用量行应在质量自检之前"
+        );
+
+        let without_usage = render_quality_report(&[], &empty_validation(), &[], None);
+        assert!(!without_usage.contains("模型用量"));
     }
 
     #[test]
@@ -266,6 +288,7 @@ mod tests {
             &[verified_claim(), unsupported_claim()],
             &empty_validation(),
             &[],
+            None,
         );
         assert!(md.contains("已验证: 1"));
         assert!(md.contains("无依据: 1"));
@@ -308,6 +331,7 @@ mod tests {
             &[verified_claim(), inferred, unsupported_claim()],
             &validation,
             &conflicts,
+            None,
         );
 
         // 溯源三张表：列数 4 / 5 / 4
