@@ -205,20 +205,26 @@ impl FixtureLlm {
 
 #[async_trait::async_trait]
 impl MinutesLlm for FixtureLlm {
-    async fn summarize(&self, corrected_text: &str) -> Result<MinutesDraft, String> {
+    async fn summarize(
+        &self,
+        corrected_text: &str,
+    ) -> Result<(MinutesDraft, Option<(u32, u32)>), String> {
         self.prompts
             .lock()
             .unwrap()
             .push(corrected_text.to_string());
-        Ok(self.draft.clone())
+        Ok((self.draft.clone(), None))
     }
 
-    async fn extract_tasks(&self, corrected_text: &str) -> Result<Vec<TaskItem>, String> {
+    async fn extract_tasks(
+        &self,
+        corrected_text: &str,
+    ) -> Result<(Vec<TaskItem>, Option<(u32, u32)>), String> {
         self.prompts
             .lock()
             .unwrap()
             .push(corrected_text.to_string());
-        Ok(self.tasks.clone())
+        Ok((self.tasks.clone(), None))
     }
 }
 
@@ -472,7 +478,7 @@ fn deviation_4_dead_code_not_ported() {
 /// 偏离 #5：07 不输出空的「待确认沉淀候选」节（Python 恒输出）。
 #[test]
 fn deviation_5_quality_report_omits_pending_feedback_section() {
-    let report = render_quality_report(&[], &ValidationOutcome::default(), &[]);
+    let report = render_quality_report(&[], &ValidationOutcome::default(), &[], None);
     assert!(!report.contains("待确认沉淀候选"));
     assert_eq!(
         h2_sections(&report),
@@ -525,7 +531,7 @@ fn deviation_8_invalid_date_is_error_and_fails_validation() {
         .iter()
         .any(|issue| issue.level == "error" && issue.field == "截止日期"));
 
-    let report = render_quality_report(&[], &outcome, &[]);
+    let report = render_quality_report(&[], &outcome, &[], None);
     assert!(report.contains("日期格式无法识别"));
     assert!(report.contains("[未通过]"));
 }
