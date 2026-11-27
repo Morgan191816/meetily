@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { FileSpreadsheet, Play, Square } from 'lucide-react';
+import { FileSpreadsheet, FileText, Play, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -39,14 +39,18 @@ export function MinutesToolbar({
   onGenerate,
   onCancel,
 }: MinutesToolbarProps) {
-  const [exporting, setExporting] = useState(false);
+  // 两种导出各自独立的 loading 状态，互不影响。
+  const [exporting, setExporting] = useState({ excel: false, markdown: false });
   const processing = status === 'processing';
 
-  const handleExport = async () => {
-    setExporting(true);
+  const handleExport = async (kind: 'excel' | 'markdown') => {
+    const command =
+      kind === 'excel' ? 'api_export_minutes_excel' : 'api_export_minutes_markdown';
+    const label = kind === 'excel' ? 'Excel' : 'Markdown';
+    setExporting((state) => ({ ...state, [kind]: true }));
     try {
-      const path = await invoke<string>('api_export_minutes_excel', { meetingId });
-      toast.success('Excel 已导出', {
+      const path = await invoke<string>(command, { meetingId });
+      toast.success(`${label} 已导出`, {
         description: path,
         action: {
           label: '打开数据目录',
@@ -56,9 +60,9 @@ export function MinutesToolbar({
         },
       });
     } catch (cause) {
-      toast.error(`导出 Excel 失败：${String(cause)}`);
+      toast.error(`导出 ${label} 失败：${String(cause)}`);
     } finally {
-      setExporting(false);
+      setExporting((state) => ({ ...state, [kind]: false }));
     }
   };
 
@@ -79,11 +83,20 @@ export function MinutesToolbar({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => void handleExport()}
-          disabled={!hasMinutes || exporting}
+          onClick={() => void handleExport('excel')}
+          disabled={!hasMinutes || exporting.excel}
         >
           <FileSpreadsheet size={16} />
-          {exporting ? '导出中…' : '导出 Excel'}
+          {exporting.excel ? '导出中…' : '导出 Excel'}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void handleExport('markdown')}
+          disabled={!hasMinutes || exporting.markdown}
+        >
+          <FileText size={16} />
+          {exporting.markdown ? '导出中…' : '导出 Markdown'}
         </Button>
       </div>
 

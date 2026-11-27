@@ -11,6 +11,7 @@ afterAll(() => {
 
 const invoke = mock(async (command: string, _args?: Record<string, unknown>): Promise<unknown> => {
   if (command === 'api_export_minutes_excel') return 'C:/app-data/exports/meeting-a.xlsx';
+  if (command === 'api_export_minutes_markdown') return 'C:/app-data/exports/meeting-a.md';
   if (command === 'open_database_folder') return undefined;
   throw new Error(`Unexpected command: ${command}`);
 });
@@ -166,6 +167,23 @@ describe('MinutesPanel', () => {
 
     expect(invoke.mock.calls).toContainEqual([
       'api_export_minutes_excel',
+      { meetingId: 'meeting-a' },
+    ]);
+  });
+
+  test('有纪要时可导出 Markdown，调用后端', async () => {
+    await act(async () => {
+      renderer = create(minutesPanel({ minutes: '# 会议纪要' }));
+    });
+
+    expect(buttonByText(renderer!, '导出 Markdown').props.disabled).toBe(false);
+
+    await act(async () => {
+      buttonByText(renderer!, '导出 Markdown').props.onClick();
+    });
+
+    expect(invoke.mock.calls).toContainEqual([
+      'api_export_minutes_markdown',
       { meetingId: 'meeting-a' },
     ]);
   });

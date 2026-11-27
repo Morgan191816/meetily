@@ -4,7 +4,7 @@
 //! 命令只接受 meeting_id；LLM 配置读 `customOpenAIConfig`（含 protocol）。
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 
 use chrono::{Local, Utc};
@@ -324,6 +324,51 @@ pub async fn api_export_minutes_excel<R: Runtime>(
     Ok(path.to_string_lossy().to_string())
 }
 
+/// 把已存纪要 markdown 原样导出到 `<app data>/exports/<meeting_id>.md`。
+#[tauri::command]
+pub async fn api_export_minutes_markdown<R: Runtime>(
+    app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    meeting_id: String,
+) -> Result<String, String> {
+    validate_export_id(&meeting_id)?;
+
+    let export_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("获取应用数据目录失败：{error}"))?
+        .join("exports");
+    let path = write_minutes_markdown(state.db_manager.pool(), &export_dir, &meeting_id).await?;
+
+    log::info!("会议纪要 Markdown 已导出：meeting_id={meeting_id}");
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// 从 `meeting_minutes` 读 markdown 写入导出目录；UTF-8 无 BOM，末尾保证一个换行。
+async fn write_minutes_markdown(
+    pool: &SqlitePool,
+    export_dir: &Path,
+    meeting_id: &str,
+) -> Result<PathBuf, String> {
+    let markdown: Option<String> =
+        sqlx::query_scalar("SELECT markdown FROM meeting_minutes WHERE meeting_id = ?")
+            .bind(meeting_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|error| format!("读取会议纪要失败：{error}"))?;
+    let markdown = markdown.ok_or_else(|| "该会议还没有会议纪要".to_string())?;
+
+    std::fs::create_dir_all(export_dir).map_err(|error| format!("创建导出目录失败：{error}"))?;
+    let path = export_dir.join(format!("{meeting_id}.md"));
+    let content = if markdown.ends_with('\n') {
+        markdown
+    } else {
+        format!("{markdown}\n")
+    };
+    std::fs::write(&path, content).map_err(|error| format!("写入 Markdown 文件失败：{error}"))?;
+    Ok(path)
+}
+
 /// 导出文件名只允许安全字符，防止路径穿越。
 ///
 /// `Path::file_name` 要求 id 本身就是单个文件名：拦掉 `a/b`、`..`、`.`，
@@ -504,6 +549,51 @@ mod tests {
         }
         assert!(validate_export_id("meeting-abc").is_ok());
         assert!(validate_export_id("0f8c-2b1e_4a7d").is_ok());
+    }
+
+    async fn minutes_pool(markdown: Option<&str>) -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query("CREATE TABLE meeting_minutes (meeting_id TEXT PRIMARY KEY, markdown TEXT NOT NULL)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        if let Some(markdown) = markdown {
+            sqlx::query("INSERT INTO meeting_minutes (meeting_id, markdown) VALUES ('meeting-a', ?)")
+                .bind(markdown)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        pool
+    }
+
+    #[tokio::test]
+    async fn writes_minutes_markdown_verbatim_with_trailing_newline() {
+        let dir = tempfile::tempdir().unwrap();
+        let export_dir = dir.path().join("exports");
+        let source = "---\ntype: 会议纪要\n---\n\n## 决策事项\n\n- 决策-01：确认预算";
+        let pool = minutes_pool(Some(source)).await;
+
+        let path = write_minutes_markdown(&pool, &export_dir, "meeting-a")
+            .await
+            .unwrap();
+
+        assert_eq!(path, export_dir.join("meeting-a.md"));
+        let written = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(written, format!("{source}\n"));
+        assert!(!written.starts_with('\u{feff}'), "不应带 BOM");
+    }
+
+    #[tokio::test]
+    async fn rejects_markdown_export_without_minutes() {
+        let dir = tempfile::tempdir().unwrap();
+        let pool = minutes_pool(None).await;
+
+        let error = write_minutes_markdown(&pool, dir.path(), "meeting-a")
+            .await
+            .unwrap_err();
+
+        assert_eq!(error, "该会议还没有会议纪要");
     }
 
     #[test]
