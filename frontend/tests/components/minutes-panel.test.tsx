@@ -7,11 +7,13 @@ const originalCore = { ...await import('@tauri-apps/api/core') };
 const originalBlockNote = { ...await import('../../src/components/AISummary/BlockNoteSummaryView') };
 const originalDialog = { ...await import('../../src/components/ui/dialog') };
 const originalSelect = { ...await import('../../src/components/ui/select') };
+const originalDropdown = { ...await import('../../src/components/ui/dropdown-menu') };
 afterAll(() => {
   mock.module('@tauri-apps/api/core', () => originalCore);
   mock.module('@/components/AISummary/BlockNoteSummaryView', () => originalBlockNote);
   mock.module('../../src/components/ui/dialog', () => originalDialog);
   mock.module('../../src/components/ui/select', () => originalSelect);
+  mock.module('../../src/components/ui/dropdown-menu', () => originalDropdown);
 });
 
 const templates = [
@@ -52,6 +54,19 @@ mock.module('../../src/components/ui/select', () => ({
   SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
   SelectTrigger: () => null,
   SelectValue: () => null,
+}));
+
+// Radix DropdownMenu 依赖 portal；测试里直接把菜单项渲染成按钮，便于点击。
+mock.module('../../src/components/ui/dropdown-menu', () => ({
+  DropdownMenu: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: any) => <>{children}</>,
+  DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuSeparator: () => null,
+  DropdownMenuItem: ({ children, onSelect, disabled }: any) => (
+    <button type="button" disabled={disabled} onClick={() => onSelect?.()}>
+      {children}
+    </button>
+  ),
 }));
 
 // Radix Dialog 依赖浏览器 DOM；测试只关心按钮与 iframe。
@@ -252,7 +267,7 @@ describe('MinutesPanel', () => {
 
     const generateButtons = buttons(renderer!).filter((button) => textOf(button.children).includes('生成纪要'));
     expect(generateButtons).toHaveLength(1);
-    expect(buttonByText(renderer!, '导出 Excel').props.disabled).toBe(true);
+    expect(buttonByText(renderer!, '导出').props.disabled).toBe(true);
 
     await act(async () => {
       generateButtons[0].props.onClick();
@@ -331,12 +346,12 @@ describe('MinutesPanel', () => {
     ]);
   });
 
-  test('无纪要时预览按钮禁用', async () => {
+  test('无纪要时导出入口禁用', async () => {
     await act(async () => {
       renderer = create(minutesPanel());
     });
 
-    expect(buttonByText(renderer!, '预览').props.disabled).toBe(true);
+    expect(buttonByText(renderer!, '导出').props.disabled).toBe(true);
   });
 
   test('有纪要时可预览，调用后端并渲染 iframe', async () => {

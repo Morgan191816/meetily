@@ -2,9 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Eye, FileCode, FileSpreadsheet, FileText, Play, Square } from 'lucide-react';
+import { ChevronDown, Download, Eye, FileCode, FileSpreadsheet, FileText, Play, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -157,42 +164,38 @@ export function MinutesToolbar({
             生成纪要
           </Button>
         ) : null}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void handleExport('excel')}
-          disabled={!hasMinutes || exporting.excel}
-        >
-          <FileSpreadsheet size={16} />
-          {exporting.excel ? '导出中…' : '导出 Excel'}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void handleExport('markdown')}
-          disabled={!hasMinutes || exporting.markdown}
-        >
-          <FileText size={16} />
-          {exporting.markdown ? '导出中…' : '导出 Markdown'}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void handleExport('html')}
-          disabled={!hasMinutes || exporting.html}
-        >
-          <FileCode size={16} />
-          {exporting.html ? '导出中…' : '导出 HTML'}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void handlePreview()}
-          disabled={!hasMinutes || preview.loading}
-        >
-          <Eye size={16} />
-          {preview.loading ? '预览中…' : '预览'}
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!hasMinutes || exporting.excel || exporting.markdown || exporting.html}
+            >
+              <Download size={16} />
+              导出
+              <ChevronDown size={14} className="ml-1" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem disabled={exporting.excel} onSelect={() => void handleExport('excel')}>
+              <FileSpreadsheet size={16} className="mr-2" />
+              {exporting.excel ? '正在导出 Excel…' : '导出 Excel'}
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={exporting.markdown} onSelect={() => void handleExport('markdown')}>
+              <FileText size={16} className="mr-2" />
+              {exporting.markdown ? '正在导出 Markdown…' : '导出 Markdown'}
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={exporting.html} onSelect={() => void handleExport('html')}>
+              <FileCode size={16} className="mr-2" />
+              {exporting.html ? '正在导出 HTML…' : '导出 HTML'}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem disabled={preview.loading} onSelect={() => void handlePreview()}>
+              <Eye size={16} className="mr-2" />
+              {preview.loading ? '正在生成预览…' : '预览 HTML'}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {processing && (
