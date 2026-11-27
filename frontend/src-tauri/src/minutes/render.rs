@@ -68,7 +68,14 @@ pub fn render_minutes(input: &MinutesRenderInput<'_>) -> MinutesDocument {
     }
     lines.push(String::new());
 
-    // ── 3. 核心结论（结论先行，金字塔原理） ──
+    // ── 3. 会议摘要（给未参会者：目的 → 主要结论 → 未决事项） ──
+    if !draft.overview.is_empty() {
+        lines.push("## 会议摘要".to_string());
+        lines.push(draft.overview.clone());
+        lines.push(String::new());
+    }
+
+    // ── 4. 核心结论（结论先行，金字塔原理） ──
     let mut core: Vec<&str> = draft
         .decisions
         .iter()
@@ -94,7 +101,7 @@ pub fn render_minutes(input: &MinutesRenderInput<'_>) -> MinutesDocument {
         lines.push(String::new());
     }
 
-    // ── 4. 会议议题（议题名 + 讨论要点 + 结论 + 分歧点） ──
+    // ── 5. 会议议题（议题名 + 讨论要点 + 结论 + 分歧点） ──
     lines.push("## 会议议题".to_string());
     if !draft.topics.is_empty() {
         for (offset, topic) in draft.topics.iter().enumerate() {
@@ -120,7 +127,14 @@ pub fn render_minutes(input: &MinutesRenderInput<'_>) -> MinutesDocument {
     }
     lines.push(String::new());
 
-    // ── 5. 决策事项（编号 + 内容 + 依据 + 生效时间） ──
+    // ── 6. 模板自定义章节（议题之后、决策之前，按模型返回顺序） ──
+    for section in &draft.custom_sections {
+        lines.push(format!("## {}", section.heading));
+        lines.push(section.markdown.clone());
+        lines.push(String::new());
+    }
+
+    // ── 7. 决策事项（编号 + 内容 + 依据 + 生效时间） ──
     lines.push("## 决策事项".to_string());
     if !draft.decisions.is_empty() {
         for (offset, decision) in draft.decisions.iter().enumerate() {
@@ -148,7 +162,7 @@ pub fn render_minutes(input: &MinutesRenderInput<'_>) -> MinutesDocument {
     }
     lines.push(String::new());
 
-    // ── 6. 行动项（含状态列） ──
+    // ── 8. 行动项（含状态列） ──
     lines.push("## 行动项".to_string());
     if !fixed.is_empty() {
         lines.push("| 序号 | 任务名称 | 责任人 | 参与人 | 截止日期 | 状态 |".to_string());
@@ -169,7 +183,7 @@ pub fn render_minutes(input: &MinutesRenderInput<'_>) -> MinutesDocument {
     }
     lines.push(String::new());
 
-    // ── 7. 风险与阻碍（风险 → 严重度 → 缓解措施 → 负责人） ──
+    // ── 9. 风险与阻碍（风险 → 严重度 → 缓解措施 → 负责人） ──
     lines.push("## 风险与阻碍".to_string());
     if !draft.risks.is_empty() {
         for risk in &draft.risks {
@@ -197,7 +211,7 @@ pub fn render_minutes(input: &MinutesRenderInput<'_>) -> MinutesDocument {
     }
     lines.push(String::new());
 
-    // ── 8. 待决问题（非空才出） ──
+    // ── 10. 待决问题（非空才出） ──
     if !draft.open_issues.is_empty() {
         lines.push("## 待决问题".to_string());
         for issue in &draft.open_issues {
@@ -206,7 +220,7 @@ pub fn render_minutes(input: &MinutesRenderInput<'_>) -> MinutesDocument {
         lines.push(String::new());
     }
 
-    // ── 9. 下次会议 ──
+    // ── 11. 下次会议 ──
     if let Some(next) = &draft.next_meeting {
         if !next.date.is_empty() || !next.agenda.is_empty() {
             lines.push("## 下次会议".to_string());
@@ -223,7 +237,7 @@ pub fn render_minutes(input: &MinutesRenderInput<'_>) -> MinutesDocument {
         }
     }
 
-    // ── 10. 处理状态（透明可审计） ──
+    // ── 12. 处理状态（透明可审计） ──
     lines.push("## 处理状态".to_string());
     lines.push(format!(
         "- 溯源校验：{}",
@@ -243,7 +257,7 @@ pub fn render_minutes(input: &MinutesRenderInput<'_>) -> MinutesDocument {
     ));
     lines.push(String::new());
 
-    // ── 11. 溯源出处（决策/行动项的证据，AI 纪要证据模式） ──
+    // ── 13. 溯源出处（决策/行动项的证据，AI 纪要证据模式） ──
     let mut evidence: Vec<(&str, &str, &ClaimResult)> = Vec::new();
     for decision in &draft.decisions {
         let text = strip_inference_marker(&decision.content);
@@ -287,7 +301,7 @@ pub fn render_minutes(input: &MinutesRenderInput<'_>) -> MinutesDocument {
         lines.push(String::new());
     }
 
-    // ── 12. 修订记录 ──
+    // ── 14. 修订记录 ──
     lines.push("<details>".to_string());
     lines.push("<summary>修订记录（点击查看）</summary>".to_string());
     lines.push(String::new());
@@ -374,7 +388,7 @@ fn normalize_meeting_date(text: &str, today: NaiveDate) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::minutes::llm::{Decision, NextMeeting, Risk, TaskItem, Topic};
+    use crate::minutes::llm::{CustomSection, Decision, NextMeeting, Risk, TaskItem, Topic};
     use crate::minutes::traceability::{ClaimKind, ClaimResult};
     use crate::minutes::validate::FixLog;
 
@@ -408,9 +422,14 @@ mod tests {
     }
 
     fn render_with_tasks(tasks: Vec<TaskItem>) -> MinutesDocument {
-        let draft = MinutesDraft {
+        render_with_draft(base_draft(), tasks)
+    }
+
+    fn base_draft() -> MinutesDraft {
+        MinutesDraft {
             title: "路灯会议".to_string(),
             date: "2026-08-04".to_string(),
+            overview: String::new(),
             decisions: vec![Decision {
                 content: "华硕不落总灯已经结案".to_string(),
                 basis: "会上确认".to_string(),
@@ -422,6 +441,7 @@ mod tests {
                 conclusion: "继续推进".to_string(),
                 disagreement: String::new(),
             }],
+            custom_sections: Vec::new(),
             risks: vec![Risk {
                 description: "预算还没批".to_string(),
                 severity: "高".to_string(),
@@ -433,7 +453,10 @@ mod tests {
                 date: "下周三".to_string(),
                 agenda: "预算复审".to_string(),
             }),
-        };
+        }
+    }
+
+    fn render_with_draft(draft: MinutesDraft, tasks: Vec<TaskItem>) -> MinutesDocument {
         let validation = ValidationOutcome {
             fixed_tasks: tasks,
             issues: Vec::new(),
@@ -524,5 +547,56 @@ mod tests {
         let md = render_with_tasks(Vec::new()).markdown;
         assert!(md.contains("本次会议未提取到行动项。"));
         assert!(!md.contains("| 序号 | 任务名称 |"));
+    }
+
+    #[test]
+    fn omits_overview_section_when_empty() {
+        // 旧纪要（无 overview）不输出空标题
+        assert!(!render_fixture().markdown.contains("## 会议摘要"));
+    }
+
+    #[test]
+    fn overview_renders_before_core_conclusions() {
+        let draft = MinutesDraft {
+            overview: "第一段：会议目的。\n\n第二段：主要结论与未决事项。".to_string(),
+            ..base_draft()
+        };
+        let md = render_with_draft(draft, vec![task()]).markdown;
+        let overview = md.find("## 会议摘要").expect("应输出会议摘要");
+        let body = md
+            .find("第二段：主要结论与未决事项。")
+            .expect("摘要正文应原样输出");
+        let core = md.find("## 核心结论").expect("应输出核心结论");
+        assert!(overview < body && body < core, "摘要应在核心结论之前");
+    }
+
+    #[test]
+    fn custom_sections_render_in_order_between_topics_and_decisions() {
+        let draft = MinutesDraft {
+            custom_sections: vec![
+                CustomSection {
+                    heading: "评审对象与材料".to_string(),
+                    markdown: "材料一".to_string(),
+                },
+                CustomSection {
+                    heading: "评审结论".to_string(),
+                    markdown: "有条件通过".to_string(),
+                },
+            ],
+            ..base_draft()
+        };
+        let md = render_with_draft(draft, vec![task()]).markdown;
+        let topics = md.find("## 会议议题").unwrap();
+        let first = md
+            .find("## 评审对象与材料")
+            .expect("应输出第一个自定义章节");
+        let second = md.find("## 评审结论").expect("应输出第二个自定义章节");
+        let decisions = md.find("## 决策事项").unwrap();
+        assert!(
+            topics < first && first < second && second < decisions,
+            "自定义章节应按顺序位于议题与决策之间"
+        );
+        assert!(md.contains("材料一"));
+        assert!(md.contains("有条件通过"));
     }
 }

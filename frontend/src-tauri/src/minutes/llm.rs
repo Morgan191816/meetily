@@ -15,11 +15,12 @@ use crate::summary::CustomOpenAIConfig;
 const SYSTEM_PROMPT: &str = "你是一个专业的会议记录助手。";
 
 /// 照 assistant_bridge.py:259-269 的富结构 schema。
-const STEP2_JSON_SCHEMA: &str = r#"{"title": "会议标题", "date": "YYYY-MM-DD", "decisions": [{"content": "决策内容", "basis": "决策依据", "effective_date": "生效时间或空"}], "topics": [{"title": "议题名", "discussion": "讨论要点", "conclusion": "结论", "disagreement": "分歧点或空"}], "risks": [{"description": "风险描述", "severity": "高/中/低", "mitigation": "缓解措施", "owner": "负责人"}], "open_issues": ["待决问题"], "next_meeting": {"date": "下次会议日期或空", "agenda": "议程"}}"#;
+const STEP2_JSON_SCHEMA: &str = r#"{"title": "会议标题", "date": "YYYY-MM-DD", "overview": "150-250字会议摘要：会议目的、主要结论、未决事项", "decisions": [{"content": "决策内容", "basis": "决策依据", "effective_date": "生效时间或空"}], "topics": [{"title": "议题名", "discussion": "讨论要点", "conclusion": "结论", "disagreement": "分歧点或空"}], "custom_sections": [{"heading": "章节名", "markdown": "正文"}], "risks": [{"description": "风险描述", "severity": "高/中/低", "mitigation": "缓解措施", "owner": "负责人"}], "open_issues": ["待决问题"], "next_meeting": {"date": "下次会议日期或空", "agenda": "议程"}}"#;
 
 /// STEP2_JSON_SCHEMA 中的占位值；模型只回显 schema 时据此识别。
 const PLACEHOLDER_TITLE: &str = "会议标题";
 const PLACEHOLDER_DECISION: &str = "决策内容";
+const PLACEHOLDER_OVERVIEW: &str = "150-250字会议摘要：会议目的、主要结论、未决事项";
 
 /// reasoning 模型在 JSON 前输出的思考标记（照 qwen_client.py:81-86）。
 const REASONING_MARKERS: &[&str] = &[
@@ -62,13 +63,24 @@ pub struct NextMeeting {
     pub agenda: String,
 }
 
+/// 模板驱动的附加章节；`heading` 为二级标题，`markdown` 为正文。
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CustomSection {
+    pub heading: String,
+    pub markdown: String,
+}
+
 /// step2 的富结构；旧模型返回扁平字符串时由 `parse_step2_json` 升为对象。
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct MinutesDraft {
     pub title: String,
     pub date: String,
+    /// 150-250 字会议摘要，供未参会者快速了解整场会议。
+    pub overview: String,
     pub decisions: Vec<Decision>,
     pub topics: Vec<Topic>,
+    pub custom_sections: Vec<CustomSection>,
     pub risks: Vec<Risk>,
     pub open_issues: Vec<String>,
     pub next_meeting: Option<NextMeeting>,
@@ -182,19 +194,24 @@ pub async fn extract_tasks(
 
 fn step2_prompt(corrected_text: &str) -> String {
     format!(
-        "请根据以下会议记录原文，提取会议信息：\n\n\
+        "请根据以下会议记录原文，为没有参会的同事写一份完整会议纪要。\n\n\
          ## 原始文本\n{corrected_text}\n\n\
-         请输出：\n\
-         1. **会议标题**（10-20字概括核心目的）\n\
-         2. **会议日期**（YYYY-MM-DD 格式）\n\
-         3. **核心决策**（最重要的1-3条，每条一句话）\n\
-         4. **详细议题**（如有，每个议题一句话概括）\n\
-         5. **风险与阻碍**（如有）\n\n\
-         要求：\n\
-         - 每条决策/议题必须能在原文中找到依据\n\
-         - 推论/总结请标注\"[推论]\"\n\
-         - 无依据的内容不要输出\n\n\
-         请严格以 JSON 输出（不要输出其他文字），每条摘要 ≤30 字，无则空数组：{STEP2_JSON_SCHEMA}"
+         写作要求（按顺序完成）：\n\
+         1. **会议摘要**（overview）：150-250 字，按「会议目的 → 主要结论 → 未决事项」组织，\
+         让未参会者读完就知道这场会解决了什么、还差什么。\n\
+         2. **会议标题**（title，10-20 字概括核心目的）与**会议日期**（date，YYYY-MM-DD）。\n\
+         3. **分议题**（topics）：每个议题的讨论要点、结论、分歧点各 80-150 字，写清前因后果与判断依据。\n\
+         4. **决策**（decisions）：只记录会上明确拍板或分工的事项，写清内容、依据、生效时间。\n\
+         5. **风险与阻碍**（risks）：影响目标达成的问题，附严重度、缓解措施、负责人。\n\
+         6. **待决问题**（open_issues）：会上没有结论、需要后续确认的事项。\n\
+         7. **下次会议**（next_meeting）：日期与议程，无则给 null。\n\n\
+         严禁：\n\
+         - 使用「本次会议就……进行了深入讨论」「与会人员一致认为」等空泛套话；\n\
+         - 直接复述原文超过 15 字，必须改写为自己的话；\n\
+         - 编造人名、日期、数字——这些信息只能来自原文；\n\
+         - 把没有结论的讨论写成决策。\n\
+         属推断的内容请在句首标注「[推论]」。\n\n\
+         请严格以 JSON 输出（不要输出其他文字），无内容的数组给空数组：{STEP2_JSON_SCHEMA}"
     )
 }
 
@@ -227,6 +244,7 @@ pub fn parse_step2_json(raw: &str) -> Option<MinutesDraft> {
     Some(MinutesDraft {
         title: first_str(obj, &["title", "会议标题"]),
         date: first_str(obj, &["date", "会议日期"]),
+        overview: first_str(obj, &["overview", "会议摘要"]),
         decisions: norm_items(
             obj,
             &["decisions", "核心决策"],
@@ -254,6 +272,7 @@ pub fn parse_step2_json(raw: &str) -> Option<MinutesDraft> {
             disagreement: map_str(&item, "disagreement"),
         })
         .collect(),
+        custom_sections: parse_custom_sections(obj),
         risks: norm_items(
             obj,
             &["risks", "风险与阻碍"],
@@ -278,14 +297,34 @@ pub fn parse_step2_json(raw: &str) -> Option<MinutesDraft> {
     })
 }
 
-/// 只回显了 step2 schema 占位（reasoning 被截断时常见）：标题与全部决策都是占位值。
+/// 模板自定义章节：缺 heading 或正文为空时跳过，不让整次解析失败。
+fn parse_custom_sections(obj: &Map<String, Value>) -> Vec<CustomSection> {
+    obj.get("custom_sections")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    let section = item.as_object()?;
+                    let heading = first_str(section, &["heading", "章节名"]);
+                    let markdown = first_str(section, &["markdown", "正文"]);
+                    (!heading.is_empty() && !markdown.is_empty())
+                        .then_some(CustomSection { heading, markdown })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 只回显了 step2 schema 占位（reasoning 被截断时常见）：标题与全部决策都是占位值，
+/// 或摘要就是 schema 里的占位说明。
 fn is_schema_echo(draft: &MinutesDraft) -> bool {
-    draft.title == PLACEHOLDER_TITLE
-        && !draft.decisions.is_empty()
+    let decisions_echo = !draft.decisions.is_empty()
         && draft
             .decisions
             .iter()
-            .all(|decision| decision.content == PLACEHOLDER_DECISION)
+            .all(|decision| decision.content == PLACEHOLDER_DECISION);
+    (draft.title == PLACEHOLDER_TITLE && decisions_echo) || draft.overview == PLACEHOLDER_OVERVIEW
 }
 
 /// 解析 step3；接受数组或 `{tasks|行动项}` 包装对象，脏元素跳过而非整体失败。
@@ -497,6 +536,26 @@ mod tests {
     }
 
     #[test]
+    fn parses_overview_and_custom_sections() {
+        let raw = r#"{"title":"评审会","overview":"第一段\n\n第二段","custom_sections":[{"heading":"评审结论","markdown":"通过"},{"heading":"","markdown":"缺标题跳过"},{"heading":"空正文","markdown":"   "}]}"#;
+        let d = parse_step2_json(raw).unwrap();
+        assert_eq!(d.overview, "第一段\n\n第二段");
+        assert_eq!(d.custom_sections.len(), 1);
+        assert_eq!(d.custom_sections[0].heading, "评审结论");
+        assert_eq!(d.custom_sections[0].markdown, "通过");
+    }
+
+    #[test]
+    fn missing_overview_and_custom_sections_default_to_empty() {
+        let d = parse_step2_json(r#"{"title":"A"}"#).unwrap();
+        assert!(d.overview.is_empty());
+        assert!(d.custom_sections.is_empty());
+        // 空白摘要按空串处理
+        let blank = parse_step2_json(r#"{"overview":"   "}"#).unwrap();
+        assert!(blank.overview.is_empty());
+    }
+
+    #[test]
     fn accepts_legacy_chinese_keys() {
         let raw = r#"{"核心决策":["结案"],"详细议题":[{"title":"进度","conclusion":"继续"}],"风险与阻碍":["预算未批"]}"#;
         let d = parse_step2_json(raw).unwrap();
@@ -572,8 +631,14 @@ mod tests {
             schema["decisions"][0]["content"].as_str(),
             Some(PLACEHOLDER_DECISION)
         );
+        assert_eq!(schema["overview"].as_str(), Some(PLACEHOLDER_OVERVIEW));
 
         assert!(is_schema_echo(&parse_step2_json(STEP2_JSON_SCHEMA).unwrap()));
+        // 只回显 overview 占位值也算回显
+        assert!(is_schema_echo(
+            &parse_step2_json(r#"{"overview":"150-250字会议摘要：会议目的、主要结论、未决事项"}"#)
+                .unwrap()
+        ));
         let real = parse_step2_json(
             r#"{"title":"会议标题","decisions":[{"content":"结案"}]}"#,
         )
