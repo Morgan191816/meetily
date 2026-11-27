@@ -18,9 +18,18 @@ export interface MinutesProgress {
   percent: number;
 }
 
+/** `api_list_minutes_templates` 的返回项。 */
+export interface MinutesTemplateOption {
+  id: string;
+  name: string;
+  description: string;
+}
+
 /** `api_generate_minutes` / `api_get_minutes` 的返回（Rust 侧 camelCase）。 */
 export interface MinutesRecord {
   meetingId: string;
+  /** 生成时使用的模板；旧纪要为 null。 */
+  templateId?: string | null;
   markdown: string;
   qualityMarkdown: string;
   tasks: unknown[];
@@ -52,6 +61,8 @@ export function useMinutesGeneration(meetingId: string) {
   const [progress, setProgress] = useState<MinutesProgress>(IDLE_PROGRESS);
   const [minutes, setMinutes] = useState<string | null>(null);
   const [quality, setQuality] = useState<string | null>(null);
+  // 当前纪要所用模板；无纪要或旧纪要时为 null
+  const [templateId, setTemplateId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // 首次 DB 读取完成（失败也算），供自动生成判定「可以开始」
   const [loaded, setLoaded] = useState(false);
@@ -65,6 +76,7 @@ export function useMinutesGeneration(meetingId: string) {
       const record = await invoke<MinutesRecord | null>('api_get_minutes', { meetingId });
       setMinutes(record?.markdown ?? null);
       setQuality(record?.qualityMarkdown ?? null);
+      setTemplateId(record?.templateId ?? null);
     } finally {
       setLoaded(true);
     }
@@ -121,17 +133,22 @@ export function useMinutesGeneration(meetingId: string) {
     };
   }, [meetingId, load]);
 
-  const generate = useCallback(async () => {
+  const generate = useCallback(async (requestedTemplateId?: string) => {
     const runId = ++runIdRef.current;
     cancelledRef.current = false;
     setStatus('processing');
     setError(null);
     setProgress(IDLE_PROGRESS);
     try {
-      const record = await invoke<MinutesRecord>('api_generate_minutes', { meetingId });
+      // 未指定时后端按设置里的默认模板，再回退 general
+      const record = await invoke<MinutesRecord>('api_generate_minutes', {
+        meetingId,
+        templateId: requestedTemplateId,
+      });
       if (runId !== runIdRef.current) return;
       setMinutes(record.markdown);
       setQuality(record.qualityMarkdown);
+      setTemplateId(record.templateId ?? requestedTemplateId ?? null);
       setStatus('completed');
       setProgress({ stage: 'done', percent: 100 });
     } catch (cause) {
@@ -163,5 +180,5 @@ export function useMinutesGeneration(meetingId: string) {
     return true;
   }, [meetingId]);
 
-  return { status, progress, generate, cancel, minutes, quality, error, loaded };
+  return { status, progress, generate, cancel, minutes, quality, templateId, error, loaded };
 }

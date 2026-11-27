@@ -163,6 +163,7 @@ export default function PageContent({
               progress={minutesGeneration.progress}
               minutes={minutesGeneration.minutes}
               error={minutesGeneration.error}
+              templateId={minutesGeneration.templateId}
               legacySummary={meetingData.aiSummary}
               onGenerate={minutesGeneration.generate}
               onCancel={() => {

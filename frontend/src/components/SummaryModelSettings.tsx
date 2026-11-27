@@ -5,8 +5,10 @@ import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { ModelConfig, ModelSettingsModal } from '@/components/ModelSettingsModal';
 import { SummaryLanguageSettings } from '@/components/SummaryLanguageSettings';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Switch } from './ui/switch';
 import { useConfig } from '@/contexts/ConfigContext';
+import type { MinutesTemplateOption } from '@/hooks/useMinutesGeneration';
 
 interface SummaryModelSettingsProps {
   refetchTrigger?: number; // Change this to trigger refetch
@@ -22,6 +24,38 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
   });
 
   const { isAutoSummary, toggleIsAutoSummary } = useConfig();
+
+  // 默认纪要模板
+  const [templates, setTemplates] = useState<MinutesTemplateOption[] | null>(null);
+  const [defaultTemplateId, setDefaultTemplateId] = useState<string | null>(null);
+
+  useEffect(() => {
+    Promise.all([
+      invoke<MinutesTemplateOption[]>('api_list_minutes_templates'),
+      invoke<string>('api_get_default_minutes_template'),
+    ])
+      .then(([list, current]) => {
+        setTemplates(list);
+        setDefaultTemplateId(current);
+      })
+      .catch((error) => {
+        console.error('加载纪要模板失败:', error);
+        toast.error('加载纪要模板失败');
+      });
+  }, []);
+
+  const handleTemplateChange = async (templateId: string) => {
+    const previous = defaultTemplateId;
+    setDefaultTemplateId(templateId);
+    try {
+      await invoke('api_set_default_minutes_template', { templateId });
+      toast.success('默认模板已保存');
+    } catch (error) {
+      console.error('保存默认纪要模板失败:', error);
+      setDefaultTemplateId(previous);
+      toast.error('保存默认模板失败');
+    }
+  };
 
   // Reusable fetch function
   const fetchModelConfig = useCallback(async () => {
@@ -154,6 +188,30 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
           onSave={handleSaveModelConfig}
           skipInitialFetch={true}
         />
+      </div>
+
+      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+        <h3 className="text-lg font-semibold mb-2">默认纪要模板</h3>
+        <p className="text-sm text-gray-600 mb-4">
+          生成纪要时默认使用的模板；单次会议仍可在纪要页临时切换。
+        </p>
+
+        {templates && defaultTemplateId ? (
+          <Select value={defaultTemplateId} onValueChange={handleTemplateChange}>
+            <SelectTrigger className="w-64" aria-label="默认纪要模板">
+              <SelectValue placeholder="选择纪要模板" />
+            </SelectTrigger>
+            <SelectContent>
+              {templates.map((template) => (
+                <SelectItem key={template.id} value={template.id}>
+                  {template.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <p className="text-sm text-gray-500">加载中…</p>
+        )}
       </div>
     </div>
   );

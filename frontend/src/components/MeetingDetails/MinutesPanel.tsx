@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { BlockNoteSummaryView } from '@/components/AISummary/BlockNoteSummaryView';
 import { Button } from '@/components/ui/button';
 import type { MinutesProgress, MinutesStatus } from '@/hooks/useMinutesGeneration';
@@ -14,7 +15,9 @@ interface MinutesPanelProps {
   minutes: string | null;
   error: string | null;
   legacySummary?: MeetingSummary | null;
-  onGenerate: () => void | Promise<void>;
+  /** 当前纪要所用模板；无纪要时为 null。 */
+  templateId?: string | null;
+  onGenerate: (templateId?: string) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -25,9 +28,12 @@ export function MinutesPanel({
   minutes,
   error,
   legacySummary = null,
+  templateId = null,
   onGenerate,
   onCancel,
 }: MinutesPanelProps) {
+  // 模板选择由工具栏加载，这里持有值以便空态的「生成纪要」也用所选模板
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   // 旧版摘要只读回退：minutes 为空时展示 summary_processes.result 中的历史纪要。
   const legacy = minutes ? null : parseSummaryContent(legacySummary);
   const legacyMarkdown = legacy ? summaryToMarkdown(legacy) : null;
@@ -42,6 +48,9 @@ export function MinutesPanel({
         error={error}
         hasMinutes={Boolean(minutes)}
         canGenerate={Boolean(minutes) || Boolean(legacyData)}
+        templateId={templateId}
+        selectedTemplate={selectedTemplate}
+        onSelectTemplate={setSelectedTemplate}
         onGenerate={onGenerate}
         onCancel={onCancel}
       />
@@ -70,7 +79,7 @@ export function MinutesPanel({
             点击「生成纪要」，从逐字稿生成纪要、行动项与质检报告。
           </p>
           {status !== 'processing' && (
-            <Button variant="blue" size="sm" onClick={() => void onGenerate()}>
+            <Button variant="blue" size="sm" onClick={() => void onGenerate(selectedTemplate ?? undefined)}>
               生成纪要
             </Button>
           )}

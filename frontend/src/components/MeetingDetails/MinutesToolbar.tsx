@@ -1,13 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Eye, FileCode, FileSpreadsheet, FileText, Play, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
-import type { MinutesProgress, MinutesStage, MinutesStatus } from '@/hooks/useMinutesGeneration';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type {
+  MinutesProgress,
+  MinutesStage,
+  MinutesStatus,
+  MinutesTemplateOption,
+} from '@/hooks/useMinutesGeneration';
 
 const STAGE_LABELS: Record<MinutesStage, string> = {
   correcting: '术语纠正',
@@ -26,7 +32,11 @@ interface MinutesToolbarProps {
   error: string | null;
   hasMinutes: boolean;
   canGenerate: boolean;
-  onGenerate: () => void | Promise<void>;
+  /** 当前纪要所用模板；无纪要时为 null。 */
+  templateId: string | null;
+  selectedTemplate: string | null;
+  onSelectTemplate: (templateId: string) => void;
+  onGenerate: (templateId?: string) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -37,13 +47,42 @@ export function MinutesToolbar({
   error,
   hasMinutes,
   canGenerate,
+  templateId,
+  selectedTemplate,
+  onSelectTemplate,
   onGenerate,
   onCancel,
 }: MinutesToolbarProps) {
   // 各导出/预览各自独立的 loading 状态，互不影响。
   const [exporting, setExporting] = useState({ excel: false, markdown: false, html: false });
   const [preview, setPreview] = useState({ open: false, loading: false, html: '' });
+  // 模板列表加载失败时保持 null：下拉隐藏，生成走后端默认模板
+  const [templates, setTemplates] = useState<MinutesTemplateOption[] | null>(null);
+  const [defaultTemplateId, setDefaultTemplateId] = useState<string | null>(null);
   const processing = status === 'processing';
+
+  useEffect(() => {
+    let disposed = false;
+    Promise.all([
+      invoke<MinutesTemplateOption[]>('api_list_minutes_templates'),
+      invoke<string>('api_get_default_minutes_template'),
+    ])
+      .then(([list, fallback]) => {
+        if (disposed) return;
+        setTemplates(list);
+        setDefaultTemplateId(fallback);
+      })
+      .catch((cause) => console.error('加载纪要模板失败:', cause));
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  // 初始选中：当前纪要所用模板 ?? 全局默认；纪要异步读回后同步一次
+  useEffect(() => {
+    if (!templates || !defaultTemplateId) return;
+    onSelectTemplate(templateId ?? defaultTemplateId);
+  }, [templates, defaultTemplateId, templateId, onSelectTemplate]);
 
   const handleExport = async (kind: 'excel' | 'markdown' | 'html') => {
     const command = {
@@ -90,13 +129,30 @@ export function MinutesToolbar({
   return (
     <div className="border-b border-gray-200 p-4">
       <div className="flex w-full min-w-0 flex-wrap items-center justify-center gap-2">
+        {templates && selectedTemplate && (
+          <div className="flex items-center gap-2">
+            <Select value={selectedTemplate} onValueChange={onSelectTemplate} disabled={processing}>
+              <SelectTrigger className="h-8 w-40" aria-label="纪要模板">
+                <SelectValue placeholder="选择纪要模板" />
+              </SelectTrigger>
+              <SelectContent>
+                {templates.map((template) => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {hasMinutes && <span className="text-xs text-gray-500">重新生成会覆盖当前纪要</span>}
+          </div>
+        )}
         {processing ? (
           <Button variant="red" size="sm" onClick={onCancel}>
             <Square size={16} />
             停止
           </Button>
         ) : canGenerate ? (
-          <Button variant="blue" size="sm" onClick={() => void onGenerate()}>
+          <Button variant="blue" size="sm" onClick={() => void onGenerate(selectedTemplate ?? undefined)}>
             <Play size={16} />
             生成纪要
           </Button>

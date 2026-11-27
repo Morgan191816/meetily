@@ -6,11 +6,22 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 const originalCore = { ...await import('@tauri-apps/api/core') };
 const originalBlockNote = { ...await import('../../src/components/AISummary/BlockNoteSummaryView') };
 const originalDialog = { ...await import('../../src/components/ui/dialog') };
+const originalSelect = { ...await import('../../src/components/ui/select') };
 afterAll(() => {
   mock.module('@tauri-apps/api/core', () => originalCore);
   mock.module('@/components/AISummary/BlockNoteSummaryView', () => originalBlockNote);
   mock.module('../../src/components/ui/dialog', () => originalDialog);
+  mock.module('../../src/components/ui/select', () => originalSelect);
 });
+
+const templates = [
+  { id: 'general', name: '通用纪要', description: '' },
+  { id: 'standup', name: '例会/周会', description: '' },
+  { id: 'review', name: '项目评审', description: '' },
+  { id: 'client', name: '客户沟通', description: '' },
+  { id: 'retro', name: '复盘', description: '' },
+];
+let templatesFail = false;
 
 const invoke = mock(async (command: string, _args?: Record<string, unknown>): Promise<unknown> => {
   if (command === 'api_export_minutes_excel') return 'C:/app-data/exports/meeting-a.xlsx';
@@ -18,9 +29,30 @@ const invoke = mock(async (command: string, _args?: Record<string, unknown>): Pr
   if (command === 'api_export_minutes_html') return 'C:/app-data/exports/meeting-a.html';
   if (command === 'api_get_minutes_html') return '<!doctype html><html><body>预览内容</body></html>';
   if (command === 'open_database_folder') return undefined;
+  if (command === 'api_list_minutes_templates') {
+    if (templatesFail) throw new Error('模板加载失败');
+    return templates;
+  }
+  if (command === 'api_get_default_minutes_template') {
+    if (templatesFail) throw new Error('模板加载失败');
+    return 'general';
+  }
   throw new Error(`Unexpected command: ${command}`);
 });
 mock.module('@tauri-apps/api/core', () => ({ invoke }));
+
+// 用原生 select 承载 Radix Select，便于在 react-test-renderer 里触发 onValueChange
+mock.module('../../src/components/ui/select', () => ({
+  Select: ({ value, onValueChange, children, disabled }: any) => (
+    <select value={value} onChange={(event) => onValueChange?.(event.target.value)} disabled={disabled}>
+      {children}
+    </select>
+  ),
+  SelectContent: ({ children }: any) => <>{children}</>,
+  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
+  SelectTrigger: () => null,
+  SelectValue: () => null,
+}));
 
 // Radix Dialog 依赖浏览器 DOM；测试只关心按钮与 iframe。
 const Container = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
@@ -83,8 +115,14 @@ let renderer: ReactTestRenderer | undefined;
 afterEach(async () => {
   if (renderer) await act(async () => renderer!.unmount());
   renderer = undefined;
+  templatesFail = false;
   invoke.mockClear();
 });
+
+/** 等工具栏的模板列表与默认模板加载完成。 */
+async function flushTemplateLoad() {
+  await act(async () => {});
+}
 
 describe('MinutesPanel', () => {
   test('无纪要时显示空态与生成按钮', async () => {
@@ -101,6 +139,80 @@ describe('MinutesPanel', () => {
       buttonByText(renderer!, '生成纪要').props.onClick();
     });
     expect(onGenerate).toHaveBeenCalledTimes(1);
+  });
+
+  test('工具栏渲染 5 个模板选项并默认选中全局默认', async () => {
+    await act(async () => {
+      renderer = create(minutesPanel());
+    });
+    await flushTemplateLoad();
+
+    const select = renderer!.root.findByType('select');
+    expect(select.findAllByType('option')).toHaveLength(5);
+    expect(select.props.value).toBe('general');
+  });
+
+  test('已有纪要时默认选中其模板并提示覆盖', async () => {
+    await act(async () => {
+      renderer = create(minutesPanel({ minutes: '# 会议纪要', templateId: 'client' }));
+    });
+    await flushTemplateLoad();
+
+    const select = renderer!.root.findByType('select');
+    expect(select.props.value).toBe('client');
+    expect(textOf(renderer!.toJSON())).toContain('重新生成会覆盖当前纪要');
+  });
+
+  test('选择模板后生成把模板 id 传给 onGenerate', async () => {
+    const onGenerate = mock(() => {});
+    await act(async () => {
+      renderer = create(minutesPanel({ onGenerate }));
+    });
+    await flushTemplateLoad();
+
+    const select = renderer!.root.findByType('select');
+    await act(async () => {
+      select.props.onChange({ target: { value: 'review' } });
+    });
+    await act(async () => {
+      buttonByText(renderer!, '生成纪要').props.onClick();
+    });
+
+    expect(onGenerate).toHaveBeenCalledWith('review');
+  });
+
+  test('有纪要时工具栏生成也带上所选模板', async () => {
+    const onGenerate = mock(() => {});
+    await act(async () => {
+      renderer = create(minutesPanel({ minutes: '# 会议纪要', onGenerate }));
+    });
+    await flushTemplateLoad();
+
+    const select = renderer!.root.findByType('select');
+    await act(async () => {
+      select.props.onChange({ target: { value: 'standup' } });
+    });
+    await act(async () => {
+      buttonByText(renderer!, '生成纪要').props.onClick();
+    });
+
+    expect(onGenerate).toHaveBeenCalledWith('standup');
+  });
+
+  test('模板列表加载失败时隐藏下拉，生成仍可用', async () => {
+    templatesFail = true;
+    const onGenerate = mock(() => {});
+    await act(async () => {
+      renderer = create(minutesPanel({ onGenerate }));
+    });
+    await flushTemplateLoad();
+
+    expect(renderer!.root.findAllByType('select')).toHaveLength(0);
+
+    await act(async () => {
+      buttonByText(renderer!, '生成纪要').props.onClick();
+    });
+    expect(onGenerate).toHaveBeenCalledWith(undefined);
   });
 
   test('有纪要时渲染 markdown 区块', async () => {

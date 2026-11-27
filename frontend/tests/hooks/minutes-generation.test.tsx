@@ -45,7 +45,7 @@ const record = (overrides: Record<string, unknown> = {}) => ({
 let state: ReturnType<typeof useMinutesGeneration>;
 function View({ meetingId }: { meetingId: string }) {
   state = useMinutesGeneration(meetingId);
-  return <output>{JSON.stringify({ status: state.status, progress: state.progress, minutes: state.minutes, quality: state.quality, error: state.error, loaded: state.loaded })}</output>;
+  return <output>{JSON.stringify({ status: state.status, progress: state.progress, minutes: state.minutes, quality: state.quality, templateId: state.templateId, error: state.error, loaded: state.loaded })}</output>;
 }
 
 let renderer: ReactTestRenderer | null = null;
@@ -156,7 +156,10 @@ describe('useMinutesGeneration', () => {
       generation = state.generate();
     });
     expect(state.status).toBe('processing');
-    expect(invoke.mock.calls).toContainEqual(['api_generate_minutes', { meetingId: 'meeting-a' }]);
+    expect(invoke.mock.calls).toContainEqual([
+      'api_generate_minutes',
+      { meetingId: 'meeting-a', templateId: undefined },
+    ]);
 
     // 别的会议的进度必须被过滤
     await emit('minutes-progress', { meetingId: 'meeting-b', stage: 'summarizing', percent: 40 });
@@ -260,6 +263,35 @@ describe('useMinutesGeneration', () => {
     await emit('minutes-progress', { meetingId: 'meeting-a', stage: 'summarizing', percent: 60 });
     expect(state.status).toBe('idle');
     expect(state.progress).toEqual({ stage: null, percent: 0 });
+  });
+
+  test('generate 透传所选模板并记录返回的 templateId', async () => {
+    generateMinutes = async () => record({ templateId: 'review' });
+    await show();
+
+    await act(async () => {
+      await state.generate('review');
+    });
+
+    expect(invoke.mock.calls).toContainEqual([
+      'api_generate_minutes',
+      { meetingId: 'meeting-a', templateId: 'review' },
+    ]);
+    expect(state.templateId).toBe('review');
+  });
+
+  test('读取已有纪要时返回其模板', async () => {
+    getMinutes = async () => record({ templateId: 'client' });
+    await show();
+
+    expect(state.templateId).toBe('client');
+  });
+
+  test('旧纪要无模板时 templateId 为 null', async () => {
+    getMinutes = async () => record();
+    await show();
+
+    expect(state.templateId).toBeNull();
   });
 
   test('minutes-error 置为失败并保留旧纪要', async () => {
