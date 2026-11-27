@@ -4,6 +4,7 @@ pub mod commands;
 pub mod conflict;
 pub mod dates;
 pub mod excel;
+pub mod html;
 pub mod llm;
 pub mod names;
 pub mod orchestrator;

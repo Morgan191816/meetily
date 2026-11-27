@@ -16,6 +16,7 @@ use tokio_util::sync::CancellationToken;
 use crate::database::repositories::meeting::MeetingsRepository;
 use crate::database::repositories::setting::SettingsRepository;
 use crate::minutes::excel::build_workbook_bytes;
+use crate::minutes::html::render_html;
 use crate::minutes::llm::{MinutesDraft, TaskItem};
 use crate::minutes::orchestrator::{run_minutes_with_progress, MinutesInput, MinutesLlm};
 use crate::state::AppState;
@@ -344,19 +345,60 @@ pub async fn api_export_minutes_markdown<R: Runtime>(
     Ok(path.to_string_lossy().to_string())
 }
 
-/// 从 `meeting_minutes` 读 markdown 写入导出目录；UTF-8 无 BOM，末尾保证一个换行。
-async fn write_minutes_markdown(
-    pool: &SqlitePool,
-    export_dir: &Path,
-    meeting_id: &str,
-) -> Result<PathBuf, String> {
+/// 把已存纪要渲染为自包含 HTML，写入 `<app data>/exports/<meeting_id>.html`。
+#[tauri::command]
+pub async fn api_export_minutes_html<R: Runtime>(
+    app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    meeting_id: String,
+) -> Result<String, String> {
+    validate_export_id(&meeting_id)?;
+    let markdown = load_minutes_markdown(state.db_manager.pool(), &meeting_id).await?;
+
+    let export_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("获取应用数据目录失败：{error}"))?
+        .join("exports");
+    std::fs::create_dir_all(&export_dir).map_err(|error| format!("创建导出目录失败：{error}"))?;
+    let path = export_dir.join(format!("{meeting_id}.html"));
+    // 纯 UTF-8，无 BOM
+    std::fs::write(&path, render_html(&markdown))
+        .map_err(|error| format!("写入 HTML 文件失败：{error}"))?;
+
+    log::info!("会议纪要 HTML 已导出：meeting_id={meeting_id}");
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// 返回渲染后的 HTML 供应用内预览（不落盘）。
+#[tauri::command]
+pub async fn api_get_minutes_html(
+    state: tauri::State<'_, AppState>,
+    meeting_id: String,
+) -> Result<String, String> {
+    validate_export_id(&meeting_id)?;
+    let markdown = load_minutes_markdown(state.db_manager.pool(), &meeting_id).await?;
+    Ok(render_html(&markdown))
+}
+
+/// 读 `meeting_minutes.markdown`；无记录时报「该会议还没有会议纪要」。
+async fn load_minutes_markdown(pool: &SqlitePool, meeting_id: &str) -> Result<String, String> {
     let markdown: Option<String> =
         sqlx::query_scalar("SELECT markdown FROM meeting_minutes WHERE meeting_id = ?")
             .bind(meeting_id)
             .fetch_optional(pool)
             .await
             .map_err(|error| format!("读取会议纪要失败：{error}"))?;
-    let markdown = markdown.ok_or_else(|| "该会议还没有会议纪要".to_string())?;
+    markdown.ok_or_else(|| "该会议还没有会议纪要".to_string())
+}
+
+/// 从 `meeting_minutes` 读 markdown 写入导出目录；UTF-8 无 BOM，末尾保证一个换行。
+async fn write_minutes_markdown(
+    pool: &SqlitePool,
+    export_dir: &Path,
+    meeting_id: &str,
+) -> Result<PathBuf, String> {
+    let markdown = load_minutes_markdown(pool, meeting_id).await?;
 
     std::fs::create_dir_all(export_dir).map_err(|error| format!("创建导出目录失败：{error}"))?;
     let path = export_dir.join(format!("{meeting_id}.md"));

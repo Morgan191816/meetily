@@ -1,21 +1,35 @@
 import { afterAll, afterEach, describe, expect, mock, test } from 'bun:test';
+import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 // Bun 在测试文件间共享模块 mock；本套件结束后还原。
 const originalCore = { ...await import('@tauri-apps/api/core') };
 const originalBlockNote = { ...await import('../../src/components/AISummary/BlockNoteSummaryView') };
+const originalDialog = { ...await import('../../src/components/ui/dialog') };
 afterAll(() => {
   mock.module('@tauri-apps/api/core', () => originalCore);
   mock.module('@/components/AISummary/BlockNoteSummaryView', () => originalBlockNote);
+  mock.module('../../src/components/ui/dialog', () => originalDialog);
 });
 
 const invoke = mock(async (command: string, _args?: Record<string, unknown>): Promise<unknown> => {
   if (command === 'api_export_minutes_excel') return 'C:/app-data/exports/meeting-a.xlsx';
   if (command === 'api_export_minutes_markdown') return 'C:/app-data/exports/meeting-a.md';
+  if (command === 'api_export_minutes_html') return 'C:/app-data/exports/meeting-a.html';
+  if (command === 'api_get_minutes_html') return '<!doctype html><html><body>预览内容</body></html>';
   if (command === 'open_database_folder') return undefined;
   throw new Error(`Unexpected command: ${command}`);
 });
 mock.module('@tauri-apps/api/core', () => ({ invoke }));
+
+// Radix Dialog 依赖浏览器 DOM；测试只关心按钮与 iframe。
+const Container = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
+mock.module('../../src/components/ui/dialog', () => ({
+  Dialog: Container,
+  DialogContent: Container,
+  DialogHeader: Container,
+  DialogTitle: Container,
+}));
 
 // BlockNote 编辑器依赖浏览器 DOM；测试只关心面板是否把 markdown 交给渲染器。
 mock.module('@/components/AISummary/BlockNoteSummaryView', () => ({
@@ -186,6 +200,53 @@ describe('MinutesPanel', () => {
       'api_export_minutes_markdown',
       { meetingId: 'meeting-a' },
     ]);
+  });
+
+  test('有纪要时可导出 HTML，调用后端', async () => {
+    await act(async () => {
+      renderer = create(minutesPanel({ minutes: '# 会议纪要' }));
+    });
+
+    expect(buttonByText(renderer!, '导出 HTML').props.disabled).toBe(false);
+
+    await act(async () => {
+      buttonByText(renderer!, '导出 HTML').props.onClick();
+    });
+
+    expect(invoke.mock.calls).toContainEqual([
+      'api_export_minutes_html',
+      { meetingId: 'meeting-a' },
+    ]);
+  });
+
+  test('无纪要时预览按钮禁用', async () => {
+    await act(async () => {
+      renderer = create(minutesPanel());
+    });
+
+    expect(buttonByText(renderer!, '预览').props.disabled).toBe(true);
+  });
+
+  test('有纪要时可预览，调用后端并渲染 iframe', async () => {
+    await act(async () => {
+      renderer = create(minutesPanel({ minutes: '# 会议纪要' }));
+    });
+
+    expect(buttonByText(renderer!, '预览').props.disabled).toBe(false);
+
+    await act(async () => {
+      buttonByText(renderer!, '预览').props.onClick();
+    });
+    // 等 invoke 的 promise 落地
+    await act(async () => {});
+
+    expect(invoke.mock.calls).toContainEqual([
+      'api_get_minutes_html',
+      { meetingId: 'meeting-a' },
+    ]);
+    const iframe = renderer!.root.findByType('iframe');
+    expect(iframe.props.srcDoc).toContain('预览内容');
+    expect(iframe.props.sandbox).toBe('');
   });
 });
 

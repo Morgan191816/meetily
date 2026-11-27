@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { FileSpreadsheet, FileText, Play, Square } from 'lucide-react';
+import { Eye, FileCode, FileSpreadsheet, FileText, Play, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import type { MinutesProgress, MinutesStage, MinutesStatus } from '@/hooks/useMinutesGeneration';
 
@@ -39,14 +40,18 @@ export function MinutesToolbar({
   onGenerate,
   onCancel,
 }: MinutesToolbarProps) {
-  // 两种导出各自独立的 loading 状态，互不影响。
-  const [exporting, setExporting] = useState({ excel: false, markdown: false });
+  // 各导出/预览各自独立的 loading 状态，互不影响。
+  const [exporting, setExporting] = useState({ excel: false, markdown: false, html: false });
+  const [preview, setPreview] = useState({ open: false, loading: false, html: '' });
   const processing = status === 'processing';
 
-  const handleExport = async (kind: 'excel' | 'markdown') => {
-    const command =
-      kind === 'excel' ? 'api_export_minutes_excel' : 'api_export_minutes_markdown';
-    const label = kind === 'excel' ? 'Excel' : 'Markdown';
+  const handleExport = async (kind: 'excel' | 'markdown' | 'html') => {
+    const command = {
+      excel: 'api_export_minutes_excel',
+      markdown: 'api_export_minutes_markdown',
+      html: 'api_export_minutes_html',
+    }[kind];
+    const label = { excel: 'Excel', markdown: 'Markdown', html: 'HTML' }[kind];
     setExporting((state) => ({ ...state, [kind]: true }));
     try {
       const path = await invoke<string>(command, { meetingId });
@@ -64,6 +69,22 @@ export function MinutesToolbar({
     } finally {
       setExporting((state) => ({ ...state, [kind]: false }));
     }
+  };
+
+  const handlePreview = async () => {
+    setPreview({ open: true, loading: true, html: '' });
+    try {
+      const html = await invoke<string>('api_get_minutes_html', { meetingId });
+      setPreview({ open: true, loading: false, html });
+    } catch (cause) {
+      setPreview({ open: false, loading: false, html: '' });
+      toast.error(`预览失败：${String(cause)}`);
+    }
+  };
+
+  // 关闭对话框时清空 html，避免下次打开闪现旧内容。
+  const handlePreviewOpenChange = (open: boolean) => {
+    setPreview((state) => (open ? { ...state, open } : { open: false, loading: false, html: '' }));
   };
 
   return (
@@ -98,6 +119,24 @@ export function MinutesToolbar({
           <FileText size={16} />
           {exporting.markdown ? '导出中…' : '导出 Markdown'}
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void handleExport('html')}
+          disabled={!hasMinutes || exporting.html}
+        >
+          <FileCode size={16} />
+          {exporting.html ? '导出中…' : '导出 HTML'}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void handlePreview()}
+          disabled={!hasMinutes || preview.loading}
+        >
+          <Eye size={16} />
+          {preview.loading ? '预览中…' : '预览'}
+        </Button>
       </div>
 
       {processing && (
@@ -114,6 +153,24 @@ export function MinutesToolbar({
           {error}
         </p>
       )}
+
+      <Dialog open={preview.open} onOpenChange={handlePreviewOpenChange}>
+        <DialogContent aria-describedby={undefined} className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>纪要预览</DialogTitle>
+          </DialogHeader>
+          {preview.loading ? (
+            <p className="py-8 text-center text-sm text-gray-500">加载中…</p>
+          ) : (
+            <iframe
+              srcDoc={preview.html}
+              sandbox=""
+              className="h-[70vh] w-full rounded border"
+              title="纪要预览"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

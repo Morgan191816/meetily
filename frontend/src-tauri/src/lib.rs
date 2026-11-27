@@ -830,6 +830,8 @@ pub fn run() {
             minutes::commands::api_cancel_minutes,
             minutes::commands::api_export_minutes_excel,
             minutes::commands::api_export_minutes_markdown,
+            minutes::commands::api_export_minutes_html,
+            minutes::commands::api_get_minutes_html,
             // Speaker diarization commands
             audio::diarization::commands::api_get_meeting_speakers,
             audio::diarization::commands::api_rename_speaker,
