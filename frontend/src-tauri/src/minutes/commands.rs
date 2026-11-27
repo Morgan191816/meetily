@@ -1,7 +1,7 @@
 //! 会议纪要命令 — Tauri 入口 + `meeting_minutes` 持久化。
 //!
 //! 对应 `assistant_bridge.py` 的文件落盘：05 纪要 / 07 质检 / 06 Excel。
-//! 命令只接受 meeting_id；LLM 配置读 `customOpenAIConfig`（含 protocol）。
+//! 命令按 meeting_id 操作；模板 id 缺省时读设置 `minutesTemplate`。LLM 配置读 `customOpenAIConfig`（含 protocol）。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -18,7 +18,10 @@ use crate::database::repositories::setting::SettingsRepository;
 use crate::minutes::excel::build_workbook_bytes;
 use crate::minutes::html::render_html;
 use crate::minutes::llm::{MinutesDraft, TaskItem};
-use crate::minutes::orchestrator::{run_minutes_with_progress, MinutesInput, MinutesLlm};
+use crate::minutes::orchestrator::{
+    run_minutes_with_progress, MinutesInput, MinutesLlm, MinutesOutput,
+};
+use crate::minutes::templates;
 use crate::state::AppState;
 use crate::summary::CustomOpenAIConfig;
 
@@ -72,6 +75,8 @@ impl MinutesLlm for ReqwestMinutesLlm {
 #[serde(rename_all = "camelCase")]
 pub struct MinutesRecord {
     pub meeting_id: String,
+    /// 生成时使用的模板 id；旧纪要（迁移前）为 None。
+    pub template_id: Option<String>,
     pub markdown: String,
     pub quality_markdown: String,
     pub tasks: Vec<TaskItem>,
@@ -87,6 +92,7 @@ pub async fn api_generate_minutes<R: Runtime>(
     app: AppHandle<R>,
     state: tauri::State<'_, AppState>,
     meeting_id: String,
+    template_id: Option<String>,
 ) -> Result<MinutesRecord, String> {
     let meeting_id = meeting_id.trim().to_string();
     if meeting_id.is_empty() {
@@ -104,6 +110,8 @@ pub async fn api_generate_minutes<R: Runtime>(
         .await
         .map_err(|error| format!("读取大模型配置失败：{error}"))?
         .ok_or_else(|| "尚未配置自定义大模型，无法生成纪要".to_string())?;
+
+    let template = resolve_template(pool, template_id.as_deref()).await?;
 
     let folder = meeting.folder_path.as_deref().map(Path::new);
     let metadata = folder.map(read_meeting_metadata).unwrap_or_default();
@@ -150,8 +158,7 @@ pub async fn api_generate_minutes<R: Runtime>(
             project: project.as_deref(),
             source: source.as_deref(),
             metadata_created_at: Some(created_at.as_str()),
-            // Task 3 起由命令参数/设置提供；当前固定走默认模板
-            template_id: None,
+            template_id: Some(template.id),
             cancel: Some(&token),
         },
         &llm,
@@ -187,35 +194,7 @@ pub async fn api_generate_minutes<R: Runtime>(
     }
 
     let now = Utc::now().to_rfc3339();
-    let saved = async {
-        let tasks_json = serde_json::to_string(&output.tasks)
-            .map_err(|error| format!("序列化行动项失败：{error}"))?;
-        sqlx::query(
-            "INSERT INTO meeting_minutes
-                (meeting_id, markdown, quality_markdown, tasks_json, traceability_pass, validation_pass, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(meeting_id) DO UPDATE SET
-                markdown = excluded.markdown,
-                quality_markdown = excluded.quality_markdown,
-                tasks_json = excluded.tasks_json,
-                traceability_pass = excluded.traceability_pass,
-                validation_pass = excluded.validation_pass,
-                updated_at = excluded.updated_at",
-        )
-        .bind(&meeting_id)
-        .bind(&output.minutes_markdown)
-        .bind(&output.quality_markdown)
-        .bind(&tasks_json)
-        .bind(output.traceability_pass)
-        .bind(output.validation_pass)
-        .bind(&now)
-        .bind(&now)
-        .execute(pool)
-        .await
-        .map_err(|error| format!("保存会议纪要失败：{error}"))?;
-        Ok::<(), String>(())
-    }
-    .await;
+    let saved = save_minutes_record(pool, &meeting_id, template.id, &output, &now).await;
     // 落库结束才清理令牌：写库窗口内的取消仍应返回 true，而不是无声的 false
     clear_cancellation(&meeting_id);
     saved?;
@@ -229,6 +208,7 @@ pub async fn api_generate_minutes<R: Runtime>(
 
     Ok(MinutesRecord {
         meeting_id,
+        template_id: Some(template.id.to_string()),
         markdown: output.minutes_markdown,
         quality_markdown: output.quality_markdown,
         tasks: output.tasks,
@@ -239,6 +219,59 @@ pub async fn api_generate_minutes<R: Runtime>(
     })
 }
 
+/// 解析本次生成使用的模板：参数 > 设置里的默认模板 > `general`；未知 id 回退 `general`。
+async fn resolve_template(
+    pool: &SqlitePool,
+    requested: Option<&str>,
+) -> Result<&'static templates::MinutesTemplate, String> {
+    let requested = match requested.map(str::trim).filter(|id| !id.is_empty()) {
+        Some(id) => id.to_string(),
+        None => SettingsRepository::get_minutes_template(pool)
+            .await
+            .map_err(|error| format!("读取默认纪要模板失败：{error}"))?
+            .unwrap_or_else(|| templates::DEFAULT_ID.to_string()),
+    };
+    Ok(templates::find(&requested))
+}
+
+/// 写入（或覆盖）一条纪要；`template_id` 记录本次生成所用模板。
+async fn save_minutes_record(
+    pool: &SqlitePool,
+    meeting_id: &str,
+    template_id: &str,
+    output: &MinutesOutput,
+    now: &str,
+) -> Result<(), String> {
+    let tasks_json =
+        serde_json::to_string(&output.tasks).map_err(|error| format!("序列化行动项失败：{error}"))?;
+    sqlx::query(
+        "INSERT INTO meeting_minutes
+            (meeting_id, template_id, markdown, quality_markdown, tasks_json, traceability_pass, validation_pass, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(meeting_id) DO UPDATE SET
+            template_id = excluded.template_id,
+            markdown = excluded.markdown,
+            quality_markdown = excluded.quality_markdown,
+            tasks_json = excluded.tasks_json,
+            traceability_pass = excluded.traceability_pass,
+            validation_pass = excluded.validation_pass,
+            updated_at = excluded.updated_at",
+    )
+    .bind(meeting_id)
+    .bind(template_id)
+    .bind(&output.minutes_markdown)
+    .bind(&output.quality_markdown)
+    .bind(&tasks_json)
+    .bind(output.traceability_pass)
+    .bind(output.validation_pass)
+    .bind(now)
+    .bind(now)
+    .execute(pool)
+    .await
+    .map_err(|error| format!("保存会议纪要失败：{error}"))?;
+    Ok(())
+}
+
 /// 读回已生成的纪要；未生成时返回 None。
 #[tauri::command]
 pub async fn api_get_minutes<R: Runtime>(
@@ -246,16 +279,36 @@ pub async fn api_get_minutes<R: Runtime>(
     state: tauri::State<'_, AppState>,
     meeting_id: String,
 ) -> Result<Option<MinutesRecord>, String> {
-    let row = sqlx::query_as::<_, (String, String, String, bool, bool, String, String)>(
-        "SELECT markdown, quality_markdown, tasks_json, traceability_pass, validation_pass, created_at, updated_at
+    load_minutes_record(state.db_manager.pool(), &meeting_id).await
+}
+
+/// 读回已存纪要；`template_id` 为 NULL（旧纪要）时返回 None。
+async fn load_minutes_record(
+    pool: &SqlitePool,
+    meeting_id: &str,
+) -> Result<Option<MinutesRecord>, String> {
+    let row = sqlx::query_as::<
+        _,
+        (
+            String,
+            String,
+            String,
+            bool,
+            bool,
+            String,
+            String,
+            Option<String>,
+        ),
+    >(
+        "SELECT markdown, quality_markdown, tasks_json, traceability_pass, validation_pass, created_at, updated_at, template_id
          FROM meeting_minutes WHERE meeting_id = ?",
     )
-    .bind(&meeting_id)
-    .fetch_optional(state.db_manager.pool())
+    .bind(meeting_id)
+    .fetch_optional(pool)
     .await
     .map_err(|error| format!("读取会议纪要失败：{error}"))?;
 
-    let Some((markdown, quality_markdown, tasks_json, traceability_pass, validation_pass, created_at, updated_at)) = row else {
+    let Some((markdown, quality_markdown, tasks_json, traceability_pass, validation_pass, created_at, updated_at, template_id)) = row else {
         return Ok(None);
     };
     // 行动项损坏时降级为空数组，不能连带隐藏完好的 markdown
@@ -265,7 +318,8 @@ pub async fn api_get_minutes<R: Runtime>(
     });
 
     Ok(Some(MinutesRecord {
-        meeting_id,
+        meeting_id: meeting_id.to_string(),
+        template_id,
         markdown,
         quality_markdown,
         tasks,
@@ -274,6 +328,60 @@ pub async fn api_get_minutes<R: Runtime>(
         created_at,
         updated_at,
     }))
+}
+
+/// 模板下拉项；字段名本身就是单字，camelCase 后无变化。
+#[derive(Debug, Serialize)]
+pub struct TemplateMeta {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+}
+
+/// 列出可用纪要模板。
+#[tauri::command]
+pub fn api_list_minutes_templates() -> Vec<TemplateMeta> {
+    templates::all()
+        .iter()
+        .map(|template| TemplateMeta {
+            id: template.id.to_string(),
+            name: template.name.to_string(),
+            description: template.description.to_string(),
+        })
+        .collect()
+}
+
+/// 默认纪要模板 id；未设置或已失效时返回 `general`。
+#[tauri::command]
+pub async fn api_get_default_minutes_template(
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
+    let stored = SettingsRepository::get_minutes_template(state.db_manager.pool())
+        .await
+        .map_err(|error| format!("读取默认纪要模板失败：{error}"))?;
+    Ok(stored
+        .map(|id| templates::find(&id).id.to_string())
+        .unwrap_or_else(|| templates::DEFAULT_ID.to_string()))
+}
+
+/// 设置默认纪要模板；未知 id 直接报错，避免把拼写错误写进设置。
+#[tauri::command]
+pub async fn api_set_default_minutes_template(
+    state: tauri::State<'_, AppState>,
+    template_id: String,
+) -> Result<(), String> {
+    ensure_known_template(&template_id)?;
+    SettingsRepository::save_minutes_template(state.db_manager.pool(), &template_id)
+        .await
+        .map_err(|error| format!("保存默认纪要模板失败：{error}"))
+}
+
+fn ensure_known_template(template_id: &str) -> Result<(), String> {
+    templates::all()
+        .iter()
+        .any(|template| template.id == template_id)
+        .then_some(())
+        .ok_or_else(|| format!("未知的纪要模板：{template_id}"))
 }
 
 /// 取消在途的纪要生成；返回是否确有任务被取消。
@@ -599,18 +707,143 @@ mod tests {
 
     async fn minutes_pool(markdown: Option<&str>) -> SqlitePool {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::query("CREATE TABLE meeting_minutes (meeting_id TEXT PRIMARY KEY, markdown TEXT NOT NULL)")
+        sqlx::query(
+            "CREATE TABLE meeting_minutes (
+                meeting_id TEXT PRIMARY KEY,
+                template_id TEXT,
+                markdown TEXT NOT NULL,
+                quality_markdown TEXT NOT NULL,
+                tasks_json TEXT NOT NULL,
+                traceability_pass INTEGER NOT NULL,
+                validation_pass INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        if let Some(markdown) = markdown {
+            sqlx::query(
+                "INSERT INTO meeting_minutes
+                    (meeting_id, markdown, quality_markdown, tasks_json, traceability_pass, validation_pass, created_at, updated_at)
+                 VALUES ('meeting-a', ?, '', '[]', 1, 1, 'now', 'now')",
+            )
+            .bind(markdown)
             .execute(&pool)
             .await
             .unwrap();
-        if let Some(markdown) = markdown {
-            sqlx::query("INSERT INTO meeting_minutes (meeting_id, markdown) VALUES ('meeting-a', ?)")
-                .bind(markdown)
-                .execute(&pool)
-                .await
-                .unwrap();
         }
         pool
+    }
+
+    async fn settings_pool() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query(
+            "CREATE TABLE settings (
+                id TEXT PRIMARY KEY,
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                whisperModel TEXT NOT NULL,
+                minutesTemplate TEXT
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        pool
+    }
+
+    fn output() -> MinutesOutput {
+        MinutesOutput {
+            title: "会议纪要".to_string(),
+            meeting_date: "2026-11-27".to_string(),
+            minutes_markdown: "## 会议摘要\n\n内容".to_string(),
+            quality_markdown: "## 质检".to_string(),
+            excel_bytes: Vec::new(),
+            tasks: Vec::new(),
+            traceability_pass: true,
+            validation_pass: true,
+            usage: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn unknown_template_falls_back_to_general_and_is_saved() {
+        let pool = minutes_pool(None).await;
+        let template = resolve_template(&pool, Some("不存在")).await.unwrap();
+        assert_eq!(template.id, templates::DEFAULT_ID);
+
+        save_minutes_record(&pool, "meeting-a", template.id, &output(), "now")
+            .await
+            .unwrap();
+        let record = load_minutes_record(&pool, "meeting-a").await.unwrap().unwrap();
+        assert_eq!(record.template_id.as_deref(), Some("general"));
+    }
+
+    #[tokio::test]
+    async fn default_template_used_when_argument_missing() {
+        let pool = settings_pool().await;
+        assert_eq!(resolve_template(&pool, None).await.unwrap().id, "general");
+
+        SettingsRepository::save_minutes_template(&pool, "retro").await.unwrap();
+        assert_eq!(resolve_template(&pool, None).await.unwrap().id, "retro");
+        // 显式参数优先于默认设置
+        assert_eq!(resolve_template(&pool, Some("client")).await.unwrap().id, "client");
+    }
+
+    #[tokio::test]
+    async fn default_minutes_template_round_trips() {
+        let pool = settings_pool().await;
+        assert_eq!(SettingsRepository::get_minutes_template(&pool).await.unwrap(), None);
+
+        SettingsRepository::save_minutes_template(&pool, "review").await.unwrap();
+        assert_eq!(
+            SettingsRepository::get_minutes_template(&pool).await.unwrap().as_deref(),
+            Some("review")
+        );
+        SettingsRepository::save_minutes_template(&pool, "standup").await.unwrap();
+        assert_eq!(
+            SettingsRepository::get_minutes_template(&pool).await.unwrap().as_deref(),
+            Some("standup")
+        );
+    }
+
+    #[tokio::test]
+    async fn generated_minutes_return_template_id() {
+        let pool = minutes_pool(None).await;
+        let template = resolve_template(&pool, Some("review")).await.unwrap();
+        save_minutes_record(&pool, "meeting-a", template.id, &output(), "now")
+            .await
+            .unwrap();
+
+        let record = load_minutes_record(&pool, "meeting-a").await.unwrap().unwrap();
+        assert_eq!(record.template_id.as_deref(), Some("review"));
+        assert_eq!(record.markdown, "## 会议摘要\n\n内容");
+    }
+
+    #[tokio::test]
+    async fn legacy_minutes_without_template_id_read_as_none() {
+        let pool = minutes_pool(None).await;
+        sqlx::query(
+            "INSERT INTO meeting_minutes
+                (meeting_id, markdown, quality_markdown, tasks_json, traceability_pass, validation_pass, created_at, updated_at)
+             VALUES ('meeting-a', '# 旧纪要', '', '[]', 1, 1, 'now', 'now')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let record = load_minutes_record(&pool, "meeting-a").await.unwrap().unwrap();
+        assert_eq!(record.template_id, None);
+    }
+
+    #[test]
+    fn rejects_unknown_default_template() {
+        assert!(ensure_known_template("不存在").is_err());
+        for template in templates::all() {
+            assert!(ensure_known_template(template.id).is_ok());
+        }
     }
 
     #[tokio::test]

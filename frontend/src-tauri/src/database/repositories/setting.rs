@@ -306,6 +306,40 @@ impl SettingsRepository {
         Ok(())
     }
 
+    // ===== MINUTES TEMPLATE METHODS =====
+
+    /// 默认纪要模板 id；未设置或为空时返回 None，由调用方回退 `general`。
+    pub async fn get_minutes_template(
+        pool: &SqlitePool,
+    ) -> std::result::Result<Option<String>, sqlx::Error> {
+        let value: Option<Option<String>> = sqlx::query_scalar(
+            "SELECT minutesTemplate FROM settings WHERE id = '1' LIMIT 1",
+        )
+        .fetch_optional(pool)
+        .await?;
+        Ok(value.flatten().filter(|id| !id.trim().is_empty()))
+    }
+
+    /// 写入默认纪要模板；沿用 `save_api_key` 的默认列值，保证单行表可插入。
+    pub async fn save_minutes_template(
+        pool: &SqlitePool,
+        template_id: &str,
+    ) -> std::result::Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            INSERT INTO settings (id, provider, model, whisperModel, minutesTemplate)
+            VALUES ('1', 'openai', 'gpt-4o-2024-11-20', 'large-v3', $1)
+            ON CONFLICT(id) DO UPDATE SET
+                minutesTemplate = excluded.minutesTemplate
+            "#,
+        )
+        .bind(template_id)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
     // ===== CUSTOM OPENAI CONFIG METHODS =====
 
     /// Gets the custom OpenAI configuration from JSON
